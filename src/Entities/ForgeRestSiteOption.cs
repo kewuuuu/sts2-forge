@@ -33,6 +33,7 @@ public sealed class ForgeRestSiteOption(Player owner) : RestSiteOption(owner)
 
 	public override async Task<bool> OnSelect()
 	{
+		Log.Info(Sts2ForgeMod.LogPrefix + "forge OnSelect entered");
 		ForgeConfig config = ForgeRuntimeConfig.ForThisRun;
 		int floor = Owner.RunState.TotalFloor;
 		if (IsSpent(config, floor))
@@ -49,13 +50,24 @@ public sealed class ForgeRestSiteOption(Player owner) : RestSiteOption(owner)
 		{
 			CardModel[] targets = Owner.Deck.Cards.Where(ForgeLevels.IsForgeable).ToArray();
 			uint targetChoice = sync.ReserveChoiceId(Owner);
+			Log.Info(Sts2ForgeMod.LogPrefix + $"forge target choice: local={local} id={targetChoice} candidates={targets.Length}");
 			List<int> targetSelection;
 			if (local)
 			{
 				try
 				{
 					screen = ForgeScreen.TryOpen(config.SuccessPercent, Owner.Deck.Cards);
-					targetSelection = screen == null ? [] : await screen.ChooseTarget(targets);
+					if (screen == null)
+					{
+						Log.Warn(Sts2ForgeMod.LogPrefix + "forge overlay unavailable; cancelling");
+						targetSelection = [];
+					}
+					else
+					{
+						var choice = screen.ChooseTarget(targets);
+						Log.Info(Sts2ForgeMod.LogPrefix + "forge target rows ready");
+						targetSelection = await choice;
+					}
 				}
 				catch (Exception e)
 				{
@@ -68,6 +80,7 @@ public sealed class ForgeRestSiteOption(Player owner) : RestSiteOption(owner)
 			{
 				targetSelection = (await sync.WaitForRemoteChoice(Owner, targetChoice)).AsIndexes();
 			}
+			Log.Info(Sts2ForgeMod.LogPrefix + $"forge target resolved: id={targetChoice} count={targetSelection.Count}");
 			if (targetSelection.Count == 0)
 			{
 				return false;

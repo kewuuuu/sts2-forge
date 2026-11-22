@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
@@ -34,6 +35,8 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 	private readonly HBoxContainer _levelTrack = new();
 	private readonly Dictionary<CardModel, int> _deckSlots = new(ReferenceEqualityComparer.Instance);
 	private readonly Dictionary<CardModel, Button> _rows = new(ReferenceEqualityComparer.Instance);
+	private readonly Dictionary<Button, NCard?> _faces = new();
+	private bool _faceRefreshQueued;
 	private ScrollContainer _choiceScroll = null!;
 	private CardModel? _focusedCard;
 	private int _savedScroll;
@@ -72,6 +75,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 			}
 			screen.Build(percent);
 			stack.Push(screen);
+			Log.Info(Sts2ForgeMod.LogPrefix + $"forge overlay pushed: in_tree={screen.IsInsideTree()} visible={screen.IsVisibleInTree()}");
 			return screen;
 		}
 		catch (Exception e)
@@ -106,10 +110,15 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 				var inventoryBottom = inventory.GetBottomOfInventory() - inventory.GetDefaultPosition();
 				bottom = Mathf.Max(bottom, (local * inventory.GetGlobalTransformWithCanvas() * inventoryBottom).Y);
 			}
-			margins.AddThemeConstantOverride("margin_top", Mathf.Max(34, Mathf.CeilToInt(bottom) + 12));
+			int top = Mathf.Max(34, Mathf.CeilToInt(bottom) + 12);
+			if (margins.GetThemeConstant("margin_top") != top)
+			{
+				margins.AddThemeConstantOverride("margin_top", top);
+			}
 		}
 		Ready += FitHeader;
-		Resized += () => Callable.From(FitHeader).CallDeferred();
+		TreeEntered += () => GetViewport().SizeChanged += FitHeader;
+		TreeExiting += () => GetViewport().SizeChanged -= FitHeader;
 		VBoxContainer page = Column();
 		margins.AddChild(page);
 		HBoxContainer header = new();
@@ -138,6 +147,9 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		choices.AddChild(_status);
 		_choices.AddThemeConstantOverride("separation", 7);
 		_choiceScroll = Scroll(_choices);
+		_choices.SortChildren += QueueFaceRefresh;
+		_choiceScroll.Resized += QueueFaceRefresh;
+		_choiceScroll.GetVScrollBar().ValueChanged += _ => QueueFaceRefresh();
 		choices.AddChild(_choiceScroll);
 		AddColumn(choices, 316, 1.1f);
 
@@ -352,6 +364,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		try
 		{
 			bool restore = _materials;
+			ReleaseFaces();
 			_rows.Clear();
 			foreach (Node child in _choices.GetChildren())
 			{
@@ -360,6 +373,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 			}
 			_finish.Disabled = false;
 			render();
+			QueueFaceRefresh();
 			if (_materials)
 			{
 				if (!restore)
@@ -455,6 +469,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 	public void AfterOverlayShown()
 	{
 		Show();
+		QueueFaceRefresh();
 		if (_hotkeys == null && NHotkeyManager.Instance is { } manager)
 		{
 			_hotkeys = manager;
@@ -482,6 +497,12 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 
 	private void OnTreeExiting()
 	{
+		if (_faceRefreshQueued)
+		{
+			GetTree().ProcessFrame -= RefreshVisibleFaces;
+			_faceRefreshQueued = false;
+		}
+		ReleaseFaces();
 		UnbindReturnHotkeys();
 		End();
 	}
@@ -511,6 +532,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		};
 		_choices.AddChild(button);
 		StyleButton(button, false, 22);
+		button.AddChild(new Control { Name = "FaceSlot", MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Disabled });
 		Label caption = Heading(CardLabel(card), 19);
 		caption.Name = "Caption";
 		caption.HorizontalAlignment = HorizontalAlignment.Center;
@@ -520,23 +542,62 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		caption.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
 		caption.OffsetTop = -38;
 		caption.OffsetBottom = -4;
-		if (NCard.Create(card) is { } face)
-		{
-			button.AddChild(face);
-			face.MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Disabled;
-			face.UpdateVisuals(PileType.Deck, CardPreviewMode.Normal);
-			void FitFace()
-			{
-				Vector2 area = button.Size - new Vector2(28, 56);
-				face.Scale = Vector2.One * Mathf.Max(0.1f, Mathf.Min(area.X / NCard.defaultSize.X, area.Y / NCard.defaultSize.Y));
-				face.Position = new Vector2(button.Size.X / 2, 8 + area.Y / 2);
-			}
-			button.Resized += FitFace;
-			FitFace();
-		}
 		button.FocusEntered += () => _focusedCard = card;
 		_rows.Add(card, button);
 		return button;
+	}
+
+	private void QueueFaceRefresh()
+	{
+		if (_faceRefreshQueued || _ended || !IsInsideTree()) return;
+		_faceRefreshQueued = true;
+		GetTree().ProcessFrame += RefreshVisibleFaces;
+	}
+
+	private void RefreshVisibleFaces()
+	{
+		GetTree().ProcessFrame -= RefreshVisibleFaces;
+		_faceRefreshQueued = false;
+		if (_choice == null || !IsVisibleInTree()) return;
+		float top = _choiceScroll.ScrollVertical;
+		float bottom = top + _choiceScroll.Size.Y;
+		foreach (var (card, button) in _rows)
+		{
+			if (button.Size.X <= 0 || button.Position.Y >= bottom || button.Position.Y + button.Size.Y <= top)
+			{
+				if (_faces.Remove(button, out var oldFace)) oldFace?.QueueFreeSafely();
+				continue;
+			}
+			if (!_faces.TryGetValue(button, out var face))
+			{
+				try
+				{
+					_faces[button] = face = NCard.Create(card);
+					if (face != null)
+					{
+						button.GetNode<Control>("FaceSlot").AddChild(face);
+						face.UpdateVisuals(PileType.Deck, CardPreviewMode.Normal);
+					}
+				}
+				catch (Exception e)
+				{
+					face?.QueueFreeSafely();
+					_faces[button] = null;
+					Log.Warn(Sts2ForgeMod.LogPrefix + $"forge face unavailable: card={card.Id} {e}");
+					continue;
+				}
+			}
+			if (face == null) continue;
+			Vector2 area = button.Size - new Vector2(28, 56);
+			face.Scale = Vector2.One * Mathf.Max(0.1f, Mathf.Min(area.X / NCard.defaultSize.X, area.Y / NCard.defaultSize.Y));
+			face.Position = new Vector2(button.Size.X / 2, 8 + area.Y / 2);
+		}
+	}
+
+	private void ReleaseFaces()
+	{
+		foreach (var face in _faces.Values) face?.QueueFreeSafely();
+		_faces.Clear();
 	}
 
 	private static ScrollContainer Scroll(VBoxContainer content)
