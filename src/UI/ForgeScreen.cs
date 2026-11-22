@@ -98,7 +98,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		header.AddChild(new TextureRect
 		{
 			Texture = ForgeArt.RestSiteIcon,
-			CustomMinimumSize = new Vector2(64, 64),
+			CustomMinimumSize = new Vector2(97, 64),
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 		});

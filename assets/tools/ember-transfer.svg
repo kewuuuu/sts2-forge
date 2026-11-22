@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="169" viewBox="0 0 256 169">
+  <defs>
+    <linearGradient id="dusk" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#314858"/><stop offset=".49" stop-color="#7f5260"/><stop offset="1" stop-color="#b97058"/></linearGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#fff4af"/><stop offset=".36" stop-color="#d59a4f"/><stop offset=".57" stop-color="#ffe099"/><stop offset="1" stop-color="#a85238"/></linearGradient>
+    <linearGradient id="sky" x1="0" x2=".2" y2="1"><stop stop-color="#253e51"/><stop offset=".63" stop-color="#4e6972"/><stop offset="1" stop-color="#ae7360"/></linearGradient>
+    <linearGradient id="wing" x1="1" x2=".2" y2="1"><stop stop-color="#fff0a2"/><stop offset=".37" stop-color="#ffb04c"/><stop offset=".72" stop-color="#ed653c"/><stop offset="1" stop-color="#a3303d"/></linearGradient>
+  </defs>
+  <!-- A printed field with a chipped, painted edge. -->
+  <path fill="#3c3846" d="M1 7L7 1 48 1 53 2 88 1 92 0 191 1 196 2 204 0 248 1 255 6 255 42 254 47 256 51 255 119 254 124 255 162 249 168 193 168 188 166 182 168 81 168 76 167 11 169 2 163 1 120 0 115 2 70 0 64Z"/>
+  <path fill="url(#dusk)" d="M5 9L10 4 48 4 53 6 60 4 129 4 135 5 199 4 204 3 246 5 251 9 251 39 249 47 252 52 251 119 249 124 251 157 246 164 195 165 188 162 181 165 85 165 75 163 66 165 12 165 6 160 6 121 4 115 6 69 4 63Z"/>
+  <g fill="#dc9474" opacity=".56"><path d="M6 116Q51 106 127 62Q65 107 7 132Z"/><path d="M5 151Q53 132 116 104L84 126 12 159Z"/><path d="M230 43L250 23 251 36Z"/><path d="M224 120L250 106 250 112Z"/></g>
+  <g fill="#353944" opacity=".5"><path d="M5 38Q27 26 76 21L46 29 7 45Z"/><path d="M7 53L40 42 6 58Z"/><path d="M72 164Q137 132 222 132L181 144 118 164Z"/><path d="M210 156L248 137 248 143Z"/></g>
+  <!-- Spent card. Its inked quill breaks off at the hot edge. -->
+  <g transform="rotate(-17 64 88)" stroke-linejoin="round">
+    <path fill="#332d36" d="M28 40L35 35 90 36 98 41 92 53 94 58 84 64 90 72 85 83 93 90 86 104 91 114 83 127 86 139 35 143 26 137Z"/>
+    <path fill="#ad947f" stroke="#382f38" stroke-width="2.6" d="M26 38L32 33 91 34 95 39 89 49 92 55 80 62 87 69 82 82 89 89 82 99 87 112 78 124 82 136 32 139 25 133Z"/>
+    <path fill="#48505b" d="M31 41L36 38 88 39 84 49 87 55 75 62 81 72 76 83 83 89 77 100 81 111 73 125 76 131 34 133Z"/>
+    <path fill="#758486" d="M36 50L83 46 85 49 77 60 81 72 76 80 78 87 72 96 37 104Z"/>
+    <path fill="#343c4a" d="M38 98Q49 89 51 70L60 61 58 71Q67 59 80 54L72 72 76 70 70 80 63 84 65 80 55 90 49 90 42 99Z"/>
+    <path fill="#cbbba1" d="M38 101Q49 93 56 82L70 66 58 84 51 93Z"/>
+    <path fill="#c9b298" d="M38 111L72 107 69 110 38 115ZM39 119L61 116 58 119 39 122Z"/>
+    <path fill="#773f40" d="M92 34L95 39 89 49 92 55 80 62 87 69 82 82 89 89 82 99 87 112 78 124 82 136 72 137 73 127 69 122 76 111 72 101 78 88 73 82 78 72 73 62 83 53 81 47Z"/>
+    <path fill="#ffb55c" d="M95 39L89 49 92 55 80 62 87 69 82 82 89 89 82 99 87 112 78 124 82 136 79 136 75 124 83 112 79 100 85 89 78 82 83 70 76 61 88 54 86 49Z"/>
+  </g>
+  <!-- Detached curls of paper and a current of molten ink. -->
+  <path fill="#ff9761" d="M76 104Q93 116 112 100C120 94 124 82 144 74Q129 87 121 100Q101 124 76 104Z"/>
+  <path fill="#ffe096" d="M83 106Q102 114 114 99Q106 115 90 111ZM104 80Q122 74 133 53Q131 73 104 80Z"/>
+  <g fill="#744b50" stroke="#f8ac6b" stroke-width="1.6" stroke-linejoin="round"><path d="M82 52L88 43 91 43 87 53 83 57Z"/><path d="M92 66L98 55 107 52 104 57 96 68Z"/><path d="M105 81L111 75 115 77 110 83Z"/><path d="M99 98L103 87 109 91 106 96Z"/><path d="M109 47L112 40 117 39 114 45Z"/></g>
+  <path fill="#d56647" d="M79 106Q85 111 92 108Q98 104 96 98Q103 101 99 106Q108 103 112 94Q114 99 110 105Q118 99 122 88Q124 106 109 113Q91 121 79 106Z"/>
+  <path fill="#ffbf69" d="M81 107Q90 114 99 110Q107 107 112 101Q109 109 103 112Q117 107 123 98Q119 109 108 114Q91 120 81 107Z"/>
+  <path fill="#ffeaa5" d="M91 114Q104 118 115 109Q107 120 94 116Z"/>
+  <!-- The receiving card has a tipped spine and a gilt fore-edge. -->
+  <g transform="rotate(13 171 85)" stroke-linejoin="round">
+    <path fill="#342d39" d="M123 26L130 19 210 18 218 24 220 140 213 151 135 153 125 147Z"/>
+    <path fill="#ad613d" stroke="#3d3039" stroke-width="2.8" d="M124 23L130 17 210 16 217 23 217 140 211 147 134 150 126 144Z"/>
+    <path fill="url(#brass)" stroke="#432f35" stroke-width="2.4" d="M122 21L129 15 207 14 214 20 214 137 208 144 131 146 124 140Z"/>
+    <path fill="#553c3d" d="M128 24L134 20 204 19 209 23 209 135 204 139 134 141 129 136Z"/>
+    <path fill="url(#sky)" d="M132 28Q140 28 140 23L198 23Q199 28 205 28L205 115Q197 116 196 121L140 122Q140 116 133 116Z"/>
+    <path fill="#ceb490" opacity=".52" d="M133 91Q153 86 176 55L187 43Q173 71 151 91L134 102ZM185 89L204 66 204 76Z"/>
+    <path fill="#ed9655" d="M133 110Q152 111 167 96Q162 110 145 119L140 119 136 115Z"/>
+    <!-- Phoenix, in profile. The nearer wing sweeps back into long primaries. -->
+    <path fill="url(#wing)" stroke="#553432" stroke-width="1.9" d="M137 112Q146 103 153 91Q155 85 151 80Q146 75 147 67L142 65 135 67Q137 60 145 58Q149 51 158 55L168 49 162 57 169 56 160 63Q155 70 161 76Q167 67 170 58Q173 48 171 38Q180 44 179 58Q186 47 189 34Q193 44 187 58Q197 47 200 39Q201 54 189 67L201 56Q198 69 184 78L197 72Q192 82 178 87L187 86Q182 93 170 95Q164 101 162 109Q160 116 151 120Q156 115 156 107Q150 116 137 119Q145 112 148 106Z"/>
+    <path fill="#ffe59a" d="M136 65Q140 60 146 60Q149 54 155 56L162 54 155 59Q148 59 146 64L142 63Z"/>
+    <path fill="#ffba55" d="M150 67Q149 76 158 81L158 88Q148 80 150 67Z"/>
+    <path fill="#893e3c" d="M159 90Q173 73 176 50Q179 71 168 84Q181 76 194 63Q184 80 169 87L181 84Q169 95 159 94Z"/>
+    <path fill="#ffde78" d="M164 81Q173 65 173 49Q178 65 164 81ZM177 70Q185 53 189 43Q188 60 177 70ZM182 69L197 48Q194 59 182 69Z"/>
+    <path fill="#fff5b6" d="M150 58L154 58 151 60Z"/><circle cx="150.5" cy="59" r=".8" fill="#392d3a"/>
+    <path fill="#e7c382" d="M137 128L155 127 152 130 138 131ZM161 127L199 125 197 128 158 130Z"/><path fill="#af8163" d="M143 135L185 132 180 135 144 137Z"/>
+    <path fill="#fff3bb" d="M123 23L130 16 169 16 136 19 128 24 127 43ZM211 80L214 72 213 117 211 127Z"/>
+  </g>
+  <g fill="#fff2a7"><path d="M211 32Q217 28 218 16Q219 27 225 29Q220 33 218 43Q217 35 211 32Z"/><path d="M116 58L119 51 119 57 122 58 118 60 116 65Z"/></g>
+  <g fill="#ffbe73"><path d="M220 57L239 41 228 54Z"/><path d="M218 65L246 57 230 64Z"/><path d="M115 24L109 12 116 19Z"/><path d="M92 125L84 138 86 130Z"/></g>
+</svg>
