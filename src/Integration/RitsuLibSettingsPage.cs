@@ -91,10 +91,10 @@ internal static class RitsuLibSettingsPage
 					value => WriteLocal(config => config.ConsumeRestAction = value),
 					() => { },
 					SaveScope.Global),
-				ModSettingsText.Literal("开启时锻铸完成即结束火堆；关闭时可继续治疗或打铁。"));
+				ModSettingsText.Literal("开启时，至少锻铸一轮后结束会话会用掉火堆行动。关闭时可继续治疗或打铁。"));
 			section.AddToggle(
 				"one_forge_per_rest",
-				ModSettingsText.Literal("每处火堆只锻铸一次"),
+				ModSettingsText.Literal("每处火堆只允许一次锻铸会话"),
 				ModSettingsBindings.Callback<bool>(
 					Sts2ForgeMod.ModId,
 					"one_forge_per_rest",
@@ -102,7 +102,7 @@ internal static class RitsuLibSettingsPage
 					value => WriteLocal(config => config.OneForgePerRest = value),
 					() => { },
 					SaveScope.Global),
-				ModSettingsText.Literal("仅在不消耗休息点时有意义。"));
+				ModSettingsText.Literal("完成至少一轮才计入次数。同一会话内可以继续锻铸。"));
 			section.AddToggle(
 				"log_debug",
 				ModSettingsText.Literal("输出调试日志"),
@@ -130,11 +130,8 @@ internal static class RitsuLibSettingsPage
 			builder.Append("（必定失败：期望材料为无穷大）");
 		}
 		builder.Append('\n');
-		builder.Append("期望材料（无垫子）：");
-		AppendLevels(builder, probability, withPad: false);
-		builder.Append('\n');
-		builder.Append("期望材料（有垫子）：");
-		AppendLevels(builder, probability, withPad: true);
+		builder.Append("期望材料：");
+		AppendLevels(builder, probability);
 		if (ForgeRuntimeConfig.IsMultiplayerClient)
 		{
 			builder.Append('\n').Append("联机中：本页只读，数值以房主为准。");
@@ -142,7 +139,7 @@ internal static class RitsuLibSettingsPage
 		return builder.ToString();
 	}
 
-	private static void AppendLevels(StringBuilder builder, double probability, bool withPad)
+	private static void AppendLevels(StringBuilder builder, double probability)
 	{
 		for (int level = 1; level <= ForgeLevels.MaxLevel; level++)
 		{
@@ -150,7 +147,7 @@ internal static class RitsuLibSettingsPage
 			{
 				builder.Append(" / ");
 			}
-			builder.Append('+').Append(level).Append(' ').Append(ForgeLevels.FormatExpected(level, probability, withPad));
+			builder.Append('+').Append(level).Append(' ').Append(ForgeLevels.FormatExpected(level, probability));
 		}
 	}
 

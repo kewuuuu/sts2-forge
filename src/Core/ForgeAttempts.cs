@@ -3,7 +3,7 @@ using MegaCrit.Sts2.Core.Logging;
 
 namespace Sts2Forge.Core;
 
-/// <summary>Per-rest-site attempt bookkeeping. In-memory only: it is never written to the save file.</summary>
+/// <summary>Per-rest-site completed session bookkeeping. In-memory only: it is never written to the save file.</summary>
 public static class ForgeAttempts
 {
 	private static readonly Dictionary<(ulong NetId, int Floor), int> Attempts = new Dictionary<(ulong NetId, int Floor), int>();

@@ -2,245 +2,183 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using MegaCrit.Sts2.Core.CardSelection;
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Context;
-using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.RestSite;
-using MegaCrit.Sts2.Core.Localization;
+using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
+using MegaCrit.Sts2.Core.Nodes.RestSite;
+using MegaCrit.Sts2.Core.Nodes.Rooms;
+using MegaCrit.Sts2.Core.Nodes.Vfx;
+using MegaCrit.Sts2.Core.Runs;
 using Sts2Forge.Config;
 using Sts2Forge.Core;
 using Sts2Forge.UI;
 
 namespace Sts2Forge.Entities;
 
-/// <summary>
-/// One forge attempt: pick a card, feed it (level+1) same-name copies, optionally protect the level
-/// with a pad card of the same forge level, then roll once.
-/// </summary>
-public sealed class ForgeRestSiteOption : RestSiteOption
+public sealed class ForgeRestSiteOption(Player owner) : RestSiteOption(owner)
 {
 	public const string ForgeOptionId = "FORGE";
-
-	public ForgeRestSiteOption(Player owner)
-		: base(owner)
-	{
-	}
-
 	public override string OptionId => ForgeOptionId;
+	public override IEnumerable<string> AssetPaths => NCardSmithVfx.AssetPaths;
+	public override bool IsEnabled => !IsSpent(ForgeRuntimeConfig.ForThisRun, Owner.RunState.TotalFloor)
+		&& Owner.Deck.Cards.Any(ForgeLevels.IsForgeable);
 
-	public override bool IsEnabled
-	{
-		get
-		{
-			try
-			{
-				if (ForgeRuntimeConfig.ForThisRun.OneForgePerRest && ForgeAttempts.HasForged(base.Owner.NetId, base.Owner.RunState.TotalFloor))
-				{
-					// The attempt budget for this rest is spent: leave the option greyed out instead of
-					// letting the player click a button that only logs a refusal.
-					return false;
-				}
-				return base.Owner.Deck.Cards.Any(card => ForgeLevels.IsForgeable(card));
-			}
-			catch (Exception)
-			{
-				// A deck that cannot be read must not advertise a forge the flow would fail to start.
-				return false;
-			}
-		}
-	}
+	private bool IsSpent(ForgeConfig config, int floor) => config.OneForgePerRest && ForgeAttempts.HasForged(Owner.NetId, floor);
 
 	public override async Task<bool> OnSelect()
 	{
+		ForgeConfig config = ForgeRuntimeConfig.ForThisRun;
+		int floor = Owner.RunState.TotalFloor;
+		if (IsSpent(config, floor))
+		{
+			return false;
+		}
+
+		ForgeScreen? screen = null;
+		int rounds = 0;
+		RunManager runManager = RunManager.Instance;
+		bool local = LocalContext.IsMe(Owner) && runManager.NetService.Type != NetGameType.Replay;
+		var sync = runManager.PlayerChoiceSynchronizer;
 		try
 		{
-			return await ForgeAsync();
+			CardModel[] targets = Owner.Deck.Cards.Where(ForgeLevels.IsForgeable).ToArray();
+			uint targetChoice = sync.ReserveChoiceId(Owner);
+			List<int> targetSelection;
+			if (local)
+			{
+				try
+				{
+					screen = ForgeScreen.TryOpen(config.SuccessPercent);
+					targetSelection = screen == null ? [] : await screen.ChooseTarget(targets);
+				}
+				catch (Exception e)
+				{
+					Log.Warn(Sts2ForgeMod.LogPrefix + "forge target selection failed: " + e);
+					targetSelection = [];
+				}
+				sync.SyncLocalChoice(Owner, targetChoice, PlayerChoiceResult.FromIndexes(targetSelection));
+			}
+			else
+			{
+				targetSelection = (await sync.WaitForRemoteChoice(Owner, targetChoice)).AsIndexes();
+			}
+			if (targetSelection.Count == 0)
+			{
+				return false;
+			}
+			if (targetSelection.Count != 1 || (uint)targetSelection[0] >= (uint)targets.Length)
+			{
+				throw new InvalidOperationException("Invalid forge target choice.");
+			}
+
+			CardModel target = targets[targetSelection[0]];
+			while (true)
+			{
+				int level = ForgeLevels.GetLevel(target);
+				int required = level + 1;
+				CardModel[] candidates = Owner.Deck.Cards.Where(card => !ReferenceEquals(card, target)
+					&& card.Id.Equals(target.Id) && card.IsRemovable).ToArray();
+				bool canForge = ForgeLevels.IsForgeable(target) && Owner.Deck.Cards.Any(card => ReferenceEquals(card, target))
+					&& candidates.Length >= required;
+				uint roundChoice = sync.ReserveChoiceId(Owner);
+				List<int> roundSelection;
+				if (local)
+				{
+					try
+					{
+						roundSelection = screen == null ? [] : await screen.ChooseMaterials(target, candidates, required, canForge);
+					}
+					catch (Exception e)
+					{
+						Log.Warn(Sts2ForgeMod.LogPrefix + "forge material selection failed: " + e);
+						roundSelection = [];
+					}
+					if (roundSelection.Count > 0)
+					{
+						bool success = ForgeLevels.RollSuccess(Owner, target, level, required, config.SuccessPercent, roundChoice);
+						roundSelection.Add(success ? 1 : 0);
+					}
+					// Empty means finish. Otherwise the last value is the owner's roll result.
+					sync.SyncLocalChoice(Owner, roundChoice, PlayerChoiceResult.FromIndexes(roundSelection));
+				}
+				else
+				{
+					roundSelection = (await sync.WaitForRemoteChoice(Owner, roundChoice)).AsIndexes();
+				}
+				if (roundSelection.Count == 0)
+				{
+					break;
+				}
+
+				int outcome = roundSelection[^1];
+				List<int> indexes = roundSelection.GetRange(0, roundSelection.Count - 1);
+				if (!canForge || outcome is not (0 or 1) || indexes.Count != required
+					|| indexes.Distinct().Count() != required || indexes.Any(i => (uint)i >= (uint)candidates.Length))
+				{
+					throw new InvalidOperationException("Invalid forge round choice.");
+				}
+				CardModel[] materials = indexes.Order().Select(i => candidates[i]).ToArray();
+				if (materials.Any(card => !card.IsRemovable || !Owner.Deck.Cards.Any(inDeck => ReferenceEquals(inDeck, card))))
+				{
+					throw new InvalidOperationException("Forge material is no longer removable from this deck.");
+				}
+				await CardPileCmd.RemoveFromDeck(materials, showPreview: false);
+				bool succeeded = outcome == 1;
+				int nextLevel = ForgeLevels.LevelAfterRound(level, succeeded);
+				ForgeLevels.SetLevel(target, nextLevel);
+				rounds++;
+				Log.Info(Sts2ForgeMod.LogPrefix + $"forge {(succeeded ? "success" : "fail")}: card={target.Id.Entry} level {level} -> {nextLevel} p={config.SuccessPercent}% materials={materials.Length} floor={floor} round={rounds}");
+				if (config.LogDebug)
+				{
+					Log.Debug(Sts2ForgeMod.LogPrefix + $"forge detail: owner={Owner.NetId} seed_level={level} choice_id={roundChoice}");
+				}
+				if (screen != null)
+				{
+					await screen.ShowRoundResult(rounds, level, nextLevel, materials.Length, succeeded);
+				}
+			}
 		}
 		catch (Exception e)
 		{
 			Log.Error(Sts2ForgeMod.LogPrefix + "forge option failed: " + e);
-			return false;
 		}
-	}
+		finally
+		{
+			try
+			{
+				screen?.Close();
+			}
+			catch (Exception e)
+			{
+				Log.Warn(Sts2ForgeMod.LogPrefix + "forge screen cleanup failed: " + e);
+			}
+		}
 
-	private async Task<bool> ForgeAsync()
-	{
-		Player owner = base.Owner;
-		ForgeConfig config = ForgeRuntimeConfig.ForThisRun;
-		int floor = owner.RunState.TotalFloor;
-		if (config.OneForgePerRest && ForgeAttempts.HasForged(owner.NetId, floor))
+		if (rounds == 0)
 		{
-			Log.Info(Sts2ForgeMod.LogPrefix + "already forged at floor " + floor + "; refusing a second attempt");
 			return false;
 		}
-		LocString mainPrompt = new LocString(ForgeLevels.LocTable, config.SuccessPercent <= 0 ? "FORGE.SELECT_MAIN_P0" : "FORGE.SELECT_MAIN");
-		mainPrompt.Add("percent", config.SuccessPercent);
-		CardModel? main = await Select(owner, ForgeLevels.IsForgeable, mainPrompt, 1);
-		if (main == null)
+		int sessions = ForgeAttempts.Register(Owner.NetId, floor);
+		if (local && !config.ConsumeRestAction && NRestSiteRoom.Instance?.GetButtonForOption(this) is { } button)
 		{
-			Log.Info(Sts2ForgeMod.LogPrefix + "forge cancelled: no card selected");
-			return false;
+			try
+			{
+				// Reload updates the appearance; vanilla only initializes the click guard when creating the button.
+				AccessTools.Field(typeof(NRestSiteButton), "_isUnclickable")?.SetValue(button, !IsEnabled);
+				button.Option = this;
+			}
+			catch (Exception e)
+			{
+				Log.Warn(Sts2ForgeMod.LogPrefix + "forge button refresh failed: " + e);
+			}
 		}
-		int level = ForgeLevels.GetLevel(main);
-		// A pad only absorbs the level loss, and a level-0 card cannot lose a level: asking for one
-		// there would burn a card for nothing. Skip the step instead of offering a pointless trade.
-		CardModel? pad = null;
-		if (level > ForgeLevels.MinLevel)
-		{
-			LocString padPrompt = new LocString(ForgeLevels.LocTable, "FORGE.SELECT_PAD");
-			pad = await Select(owner, card => !ReferenceEquals(card, main) && ForgeLevels.GetLevel(card) == level, padPrompt, 0);
-		}
-		if (pad != null && ReferenceEquals(pad, main))
-		{
-			pad = null;
-		}
-		int required = level + 1;
-		List<CardModel> materials = PickMaterials(owner, main, pad, required, out int available);
-		if (materials.Count < required)
-		{
-			Log.Info(Sts2ForgeMod.LogPrefix + "forge refused: need " + required + " copies of " + main.Id.Entry + ", deck has " + available);
-			await NotifyNotEnough(owner, main, required, available);
-			return false;
-		}
-		string padName = pad != null ? CardName(pad) : "none";
-		bool success = ForgeLevels.RollSuccess(owner, main, level, materials.Count, config.SuccessPercent);
-		await CardPileCmd.RemoveFromDeck(materials, true);
-		int newLevel = level;
-		if (success)
-		{
-			newLevel = Math.Min(ForgeLevels.MaxLevel, level + 1);
-			ForgeLevels.SetLevel(main, newLevel);
-		}
-		else if (pad != null)
-		{
-			await CardPileCmd.RemoveFromDeck(pad, true);
-		}
-		else
-		{
-			newLevel = Math.Max(ForgeLevels.MinLevel, level - 1);
-			ForgeLevels.SetLevel(main, newLevel);
-		}
-		int attempts = ForgeAttempts.Register(owner.NetId, floor);
-		string outcome = success ? "success" : (pad != null ? "fail (pad consumed)" : "fail");
-		Log.Info(Sts2ForgeMod.LogPrefix + "forge " + outcome + ": card=" + main.Id.Entry
-			+ " level " + level + " -> " + newLevel
-			+ " p=" + config.SuccessPercent + "%"
-			+ " materials=" + materials.Count
-			+ " pad=" + padName
-			+ " floor=" + floor
-			+ " attempt=" + attempts);
-		if (config.LogDebug)
-		{
-			Log.Debug(Sts2ForgeMod.LogPrefix + "forge detail: owner=" + owner.NetId
-				+ " seed_level=" + level
-				+ " total_floor=" + floor
-				+ " consume_rest_action=" + Sts2ForgeMod.BoolText(config.ConsumeRestAction)
-				+ " one_forge_per_rest=" + Sts2ForgeMod.BoolText(config.OneForgePerRest));
-		}
-		await NotifyResult(owner, main, level, newLevel, success, pad, materials.Count);
+		Log.Info(Sts2ForgeMod.LogPrefix + $"forge session ended: floor={floor} rounds={rounds} session={sessions} consume_rest_action={Sts2ForgeMod.BoolText(config.ConsumeRestAction)}");
 		return config.ConsumeRestAction;
-	}
-
-	/// <summary>
-	/// minCount 0 turns the confirm button into a real skip: with MinSelect equal to MaxSelect the
-	/// vanilla deck screen keeps that button disabled (NDeckCardSelectScreen.RefreshConfirmButtonVisibility),
-	/// which leaves the back arrow as the only way out.
-	/// </summary>
-	private static async Task<CardModel?> Select(Player owner, Func<CardModel, bool> filter, LocString prompt, int minCount)
-	{
-		CardSelectorPrefs prefs = new CardSelectorPrefs(prompt, minCount, 1)
-		{
-			Cancelable = true,
-			RequireManualConfirmation = true
-		};
-		IEnumerable<CardModel> selected = await CardSelectCmd.FromDeckGeneric(owner, prefs, filter);
-		return selected.FirstOrDefault();
-	}
-
-	private static List<CardModel> PickMaterials(Player owner, CardModel main, CardModel? pad, int required, out int available)
-	{
-		List<CardModel> materials = new List<CardModel>(required);
-		int count = 0;
-		foreach (CardModel card in owner.Deck.Cards)
-		{
-			if (ReferenceEquals(card, main))
-			{
-				continue;
-			}
-			if (pad != null && ReferenceEquals(card, pad))
-			{
-				continue;
-			}
-			if (!card.Id.Equals(main.Id))
-			{
-				continue;
-			}
-			count++;
-			if (materials.Count < required)
-			{
-				materials.Add(card);
-			}
-		}
-		available = count;
-		return materials;
-	}
-
-	private static async Task NotifyNotEnough(Player owner, CardModel main, int required, int available)
-	{
-		LocString body = new LocString(ForgeLevels.LocTable, "FORGE.NOT_ENOUGH_BODY");
-		body.Add("card", CardName(main));
-		body.Add("need", required);
-		body.Add("have", available);
-		await Tell(owner, new LocString(ForgeLevels.LocTable, "FORGE.NOT_ENOUGH"), body);
-	}
-
-	private static async Task NotifyResult(Player owner, CardModel main, int level, int newLevel, bool success, CardModel? pad, int used)
-	{
-		string titleKey = success ? "FORGE.SUCCESS" : (pad != null ? "FORGE.FAIL_PADDED" : "FORGE.FAIL");
-		string bodyKey = success ? "FORGE.RESULT_SUCCESS_BODY" : (pad != null ? "FORGE.RESULT_FAIL_PAD_BODY" : "FORGE.RESULT_FAIL_BODY");
-		LocString body = new LocString(ForgeLevels.LocTable, bodyKey);
-		body.Add("card", CardName(main));
-		body.Add("from", level);
-		body.Add("to", newLevel);
-		body.Add("used", used);
-		body.Add("pad", pad != null ? CardName(pad) : string.Empty);
-		await Tell(owner, new LocString(ForgeLevels.LocTable, titleKey), body);
-	}
-
-	/// <summary>
-	/// Only the player who forged gets a modal: the same flow replays on every peer, and a dialog on
-	/// each of them would be an unclickable duplicate.
-	/// </summary>
-	private static async Task Tell(Player owner, LocString header, LocString body)
-	{
-		if (!LocalContext.IsMe(owner))
-		{
-			return;
-		}
-		bool? shown = await ForgePopup.Tell(body, header);
-		if (!shown.HasValue)
-		{
-			Log.Info(Sts2ForgeMod.LogPrefix + "forge popup not shown; the log line above carries the outcome");
-		}
-	}
-
-	private static string CardName(CardModel card)
-	{
-		try
-		{
-			string text = card.TitleLocString.GetFormattedText();
-			if (!string.IsNullOrEmpty(text))
-			{
-				return text;
-			}
-		}
-		catch (Exception)
-		{
-		}
-		return card.Id.Entry;
 	}
 }

@@ -7,22 +7,18 @@
 - **返回 true** = 这次行动成功：`RestSiteSynchronizer.cs:197` 把选项 id 记进 `RestSiteChoices`，随后按 `Hook.ShouldDisableRemainingRestSiteOptions`（`:202`）决定清空剩余选项还是保留；选项被消费。
 - **返回 false** = 没成功：`RestSiteSynchronizer.cs:193-196` 直接 `return false`，选项**留在列表里**，可以再选一次；不写历史。
 
-所以 `ForgeRestSiteOption.ForgeAsync` 的结尾是 `return config.ConsumeRestAction;`：
-
-- `consume_rest_action=true` → 返回 true，锻铸吃掉本次火堆。
-- `consume_rest_action=false` → 返回 false，选项仍在，可以继续锻铸或去治疗/打铁；此时 `one_forge_per_rest` 用 `ForgeAttempts`（内存里按 `(NetId, Floor)` 计数）拦住第二次。
-
-选择被取消（没选主卡）、材料不够、内部异常 → 一律返回 false，不消耗任何东西。
+锻铸页面结束后，如果至少完成一轮，`ForgeRestSiteOption.OnSelect` 先登记一次 `ForgeAttempts`，再以 `ConsumeRestAction` 决定是否消费火堆行动。配置关闭时，仍可继续治疗或打铁。`OneForgePerRest` 限制同一玩家和楼层开启另一个会话。零轮退出不登记。
 
 ## 2. 哪些端执行
 
-`RestSiteSynchronizer.ChooseOption` 在**每一端**都会对**选中该选项的玩家**跑一遍 `option.OnSelect()`（`RestSiteSynchronizer.cs:105-117` 收消息后 `TaskHelper.RunSafely(ChooseOption(...))`，`:189` 调 `OnSelect`）。所以锻铸的每一步都必须确定性地只依赖 run state：
+`RestSiteSynchronizer.ChooseOption` 在每一端都对选中锻铸的玩家调用 `OnSelect`。只有该玩家本地打开 Godot 覆盖层、读操作、掷骰并显示特效。回合结算复用原版的 `PlayerChoiceSynchronizer`：
 
-- 掷骰用 `ForgeLevels.CreateRng`：种子由 `RunState.TotalFloor`、当前等级、材料张数混出来，再交给 `new Rng(owner, main.Id, mixin)`（`ForgeLevels.cs:167-173`），**不消费** `player.PlayerRng`。
-- 材料挑选是纯函数（按牌组顺序取前 N 张同名牌），不依赖字典顺序或本地配置。
-- 因此锻铸本身**没有新增任何网络消息**；两端各自算出相同结果。
+- 每端为目标和每个材料阶段按相同顺序预留选择 ID。目标消息是一个索引，空列表是未选目标就结束。
+- 每轮消息是当前材料候选列表的索引，加上操作者生成的成功标记。空列表结束会话。候选列表从双方已同步的牌组按顺序生成。
+- 其余端等待同一 ID 对应的选择，校验并按相同顺序扣材料，再应用收到的成败。即使满级或不足，仍等待一次明确的结束选择。轮次选择 ID 加入种子，重新回到同等级时可产生不同结果。
+- `NCardSmithVfx.Create(NCard)` 在固定卡面原位播放特效。按钮、返回热键和覆盖层关闭均交给同一结束入口，普通输入在逐轮结算及特效期间锁定。
 
-联机只同步「参数」：`ForgeConfigMessage`（4 个字段，尾部追加）由房主广播、客户端采纳，`ForgeConfigRequestMessage` 用于中途加入时补拉。
+配置仍由房主单独同步。`ForgeConfigMessage`（4 个字段，尾部追加）由房主广播、客户端采纳，`ForgeConfigRequestMessage` 用于中途加入时补拉。
 
 ## 3. 等级存哪
 

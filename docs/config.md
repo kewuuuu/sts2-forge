@@ -8,9 +8,9 @@
 
 | 键 | 类型 | 默认 | 范围 | 作用 |
 | --- | --- | --- | --- | --- |
-| `success_percent` | int | 50 | 0..100 | 每次锻铸的成功率。0 = 必定失败（材料照扣、等级 −1 或被垫子挡住），100 = 必定成功 |
-| `consume_rest_action` | bool | true | true/false | 锻铸是否占掉本次火堆行动。true = 选完即结束火堆；false = 还能继续治疗/打铁 |
-| `one_forge_per_rest` | bool | true | true/false | 同一处火堆是否只能锻铸一次。仅在 `consume_rest_action=false` 时有意义 |
+| `success_percent` | int | 50 | 0..100 | 每轮锻铸的成功率。0 = 必定失败（材料照扣、等级最低降到 0），100 = 必定成功 |
+| `consume_rest_action` | bool | true | true/false | 完成至少一轮并结束锻铸时是否占掉本次火堆行动。false 时还能继续治疗或打铁 |
+| `one_forge_per_rest` | bool | true | true/false | 同一处火堆是否最多允许一个完成过锻铸轮次的会话。限制不影响会话内的轮数 |
 | `log_debug` | bool | false | true/false | 把每次锻铸的种子细节写进 godot.log，排障用 |
 
 ## 示例

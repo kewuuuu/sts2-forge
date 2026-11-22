@@ -163,18 +163,17 @@ public static class ForgeLevels
 	}
 
 	/// <summary>
-	/// A reproducible roll: the seed is built from run state only (floor, level, remaining copies),
-	/// never from player.PlayerRng, so every peer derives the same result.
+	/// The choice ID distinguishes retries at the same level without advancing the run RNG.
 	/// </summary>
-	public static Rng CreateRng(Player owner, CardModel main, int level, int materialCount)
+	public static Rng CreateRng(Player owner, CardModel main, int level, int materialCount, uint choiceId)
 	{
 		ulong mixin = ((ulong)(uint)owner.RunState.TotalFloor * 1000003UL
 			+ (ulong)(uint)level * 1009UL
-			+ (ulong)(uint)materialCount) * 31UL + 17UL;
+			+ (ulong)(uint)materialCount) * 31UL + 17UL + choiceId * 2654435761UL;
 		return new Rng(owner, main.Id, mixin);
 	}
 
-	public static bool RollSuccess(Player owner, CardModel main, int level, int materialCount, int successPercent)
+	public static bool RollSuccess(Player owner, CardModel main, int level, int materialCount, int successPercent, uint choiceId)
 	{
 		int percent = Math.Clamp(successPercent, 0, 100);
 		if (percent <= 0)
@@ -185,14 +184,16 @@ public static class ForgeLevels
 		{
 			return true;
 		}
-		return CreateRng(owner, main, level, materialCount).NextInt(100) < percent;
+		return CreateRng(owner, main, level, materialCount, choiceId).NextInt(100) < percent;
 	}
+
+	internal static int LevelAfterRound(int level, bool success) => Math.Clamp(level + (success ? 1 : -1), MinLevel, MaxLevel);
 
 	/// <summary>
 	/// Expected number of consumed same-name cards to reach targetLevel.
-	/// Without a pad a failure costs one level, so F_n = ((n+1) + (1-p)F_(n-1)) / p; with a pad F_n = (n+1)/p.
+	/// F_n = ((n+1) + (1-p)F_(n-1)) / p.
 	/// </summary>
-	public static double ExpectedMaterials(int targetLevel, double successProbability, bool withPad)
+	public static double ExpectedMaterials(int targetLevel, double successProbability)
 	{
 		if (targetLevel <= 0)
 		{
@@ -203,10 +204,6 @@ public static class ForgeLevels
 		{
 			return double.PositiveInfinity;
 		}
-		if (withPad)
-		{
-			return targetLevel / p;
-		}
 		double expected = 0.0;
 		for (int level = 0; level < targetLevel; level++)
 		{
@@ -215,9 +212,9 @@ public static class ForgeLevels
 		return expected;
 	}
 
-	public static string FormatExpected(int targetLevel, double successProbability, bool withPad)
+	public static string FormatExpected(int targetLevel, double successProbability)
 	{
-		double value = ExpectedMaterials(targetLevel, successProbability, withPad);
+		double value = ExpectedMaterials(targetLevel, successProbability);
 		if (double.IsNaN(value) || double.IsInfinity(value))
 		{
 			return "∞";

@@ -9,13 +9,11 @@
 ## 2. 规则
 
 - 等级 0–5，初始 0。锻造**任意次**（每次 +1），上限 +5；**已满 5 级的牌不再出现在选牌列表里**（成功只会白扣材料、失败还会掉级）。
-- 一次锻铸 = **一次尝试**：消耗 `当前等级 + 1` 张同名牌（等级不限，含未强化；**诅咒也用同名牌**）。
+- 在独立页面手选并锁定一张目标。每轮手选 `当前等级 + 1` 张同名牌（等级不限，排除目标和不可移除牌）。
 - 成功率 `p` 由设置给（默认 50%，范围 0–100）：
   - 成功 → 等级 +1。
   - 失败 → 材料不退；等级 −1（+0 时不变）。
-- **保护材料**：可以选择「一张锻铸等级相同的牌（同名牌或非同名牌）」作为垫子。带垫子失败时**不掉级**，垫子本身被消耗。
-  - 垫子步在选牌界面用 min=0（`CardSelectorPrefs(prompt, 0, 1)`）：不选牌直接按确认（或按左上角返回箭头）就是**跳过**。原版该屏幕在 min==max 时会把确认按钮置灰（`NDeckCardSelectScreen.RefreshConfirmButtonVisibility`），只剩返回箭头可用，玩家看不出那是“可跳过”。
-  - 主牌锻铸等级为 0 时**跳过垫子步**：0 级不会再掉级，垫子纯属白烧一张牌。
+- 每轮立即扣材料、结算、记录结果并留在页面。满级或材料不足时可以结束。退出前一轮也没做则不登记。
 - 可锻铸的牌：攻击 / 技能 / 能力 / 诅咒。状态牌、任务牌不可（无意义且会污染牌组）。
 
 ## 3. 等级效果
@@ -30,9 +28,9 @@
 
 等级效果**叠加**：+3 同时拥有 +1/+2 的效果。
 
-## 4. 概率与成本（无垫子时的期望材料数）
+## 4. 概率与成本（期望材料数）
 
-递推：`F_n = ((n+1) + (1-p)·F_{n-1}) / p`，`F_0 = 1/p`；有垫子时 `F_n = (n+1)/p`。
+递推：`F_n = ((n+1) + (1-p)·F_{n-1}) / p`，`F_0 = 1/p`。
 
 | 成功率 | +1 | +2 | +3 | +4 | +5 |
 |---|---|---|---|---|---|
@@ -43,7 +41,7 @@
 | 30% | 3.3 | 17.8 | 61.5 | 176.8 | 462.5 |
 | 20% | 5 | 35 | 170 | 730 | 2995 |
 
-- `p = 0`：永远失败 —— 材料照扣、等级往回掉。设置页与确认框必须明确警告。
+- `p = 0`：永远失败 —— 材料照扣、等级往回掉。页面与设置页显示成功率。
 - `p = 100`：无风险，+5 累计只要 15 张。
 
 ## 5. 设置项（JSON：`<游戏目录>/mods/config/sts2-forge.cfg`，内容 JSON）
@@ -51,8 +49,8 @@
 | 键 | 类型 | 默认 | 范围 | 含义 |
 |---|---|---|---|---|
 | `success_percent` | int | 50 | 0–100 | 锻铸成功率 |
-| `consume_rest_action` | bool | true | — | 锻铸是否占掉本次火堆行动（false = 锻铸后还能治疗/打铁） |
-| `one_forge_per_rest` | bool | true | — | 一次火堆是否只能锻铸一次（仅在 `consume_rest_action=false` 时才有意义） |
+| `consume_rest_action` | bool | true | — | 至少完成一轮后，结束锻铸是否占掉火堆行动（false = 还可治疗或打铁） |
+| `one_forge_per_rest` | bool | true | — | 同一火堆是否仅允许一个完成过锻铸轮次的会话 |
 | `log_debug` | bool | false | — | 打印锻铸过程日志 |
 
 - 非法值回落默认并 `Log.Warn`。
@@ -74,7 +72,7 @@
 
 - 火堆选项：`MegaCrit.Sts2.Core.Events/RestSiteOption.cs:53-74`（Generate 里 Heal/Smith/(Mend) 之后调 `Hook.ModifyRestSiteOptions`）、`:23-29`（OptionId/Title/Description，loc 表 `rest_site_ui` 键 `OPTION_<ID>.name/.description/.descriptionDisabled`）、`:40` IsEnabled、`:83` `OnSelect`、`:31-35` Icon 路径写死 `ui/rest_site/option_<optionid>.png`。
 - 注入点：`MegaCrit.Sts2.Core.Hooks/Hook.cs:2156` `ModifyRestSiteOptions`（静态，可直接 postfix 追加选项），模型侧等价物 `AbstractModel.cs:2183`。
-- 选牌：`CardSelectCmd.FromDeckGeneric`（:593）用于选主卡与材料；材料过滤按 `Id.Entry` 与是否可锻铸。
+- 选牌同步沿用 `CardSelectCmd.FromDeckGeneric` 使用的 `PlayerChoiceSynchronizer`。页面自行收集玩家选择，材料按牌组顺序建立快照并过滤目标、同名及 `IsRemovable`。
 - 等级存档：`CardModel.cs:2429-2440` ToSerializable、`:2447-2471` FromSerializable；`SavedProperties` 支持 `List<SavedProperty<int>>`。
 - 关键词：`CardModel.cs:1464-1486` AddKeyword/RemoveKeyword；`CanPlay` 只在 `:1896` 查 `Unplayable`；费用取值处 `PlayerCombatState.cs:218` 已 `Math.Max(0, …)` ⇒ 诅咒可打出花 0 费。
 - 伤害/格挡加成要写**两处**（照抄附魔模式）：预览 `DamageVar.cs:28-40` / `BlockVar.cs:34` / `CalculatedDamageVar.cs:48,70` / `CalculatedBlockVar.cs:35,55`；结算 `Hook.cs:1685-1695`（伤害）、`Hook.cs:1512-1517`（格挡）。预览处调 Hook 必须传未加成的 BaseValue（`DamageVar.cs:42`），否则 +3 会算两次。
@@ -87,7 +85,7 @@
 1. `dotnet build -c Release` 0 警告 0 错误，`dist/sts2-forge/{sts2-forge.dll, sts2-forge.json}` 产出。
 2. 无头启动 exit=0，日志有 `[sts2-forge] initialized; success_percent=…, consume_rest_action=…, one_forge_per_rest=…`，且无指向本模组的 ERROR。
 3. 火堆里出现「锻铸」选项，图标不是空白/占位。
-4. 锻铸一次：扣材料、按 p 判定、成功 +1 / 失败 −1（有垫子不掉级）、材料不退。
+4. 同一页能完成 0→1→0→1，逐轮消耗 1、2、1 张。材料不足、满级、零轮取消或最终结束均符合规则。用双端检查只给操作者显示页面，其他端准确复制消耗与结果。
 5. 卡面出现词条行，悬浮有说明；读档后等级与词条都还在。
 6. +1 伤害/格挡的**显示数字与实际结算一致**；诅咒在 +2 后可以打出且 0 费。
 7. 设置页（RitsuLib，可选）能改 4 个键，概率滑块下方实时表格随拖动更新；不装 RitsuLib 时退回 JSON-only 且仍可编译。
