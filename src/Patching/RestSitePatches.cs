@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Nodes.RestSite;
 using Sts2Forge.Art;
 using Sts2Forge.Core;
 using Sts2Forge.Entities;
@@ -29,12 +31,12 @@ internal static class RestSitePatches
 
 	internal static bool RegisterIcon(Harmony harmony)
 	{
-		MethodInfo? target = AccessTools.PropertyGetter(typeof(RestSiteOption), nameof(RestSiteOption.Icon));
+		MethodInfo? target = AccessTools.Method(typeof(NRestSiteButton), "Reload");
 		if (target == null)
 		{
 			return false;
 		}
-		harmony.Patch(target, prefix: new HarmonyMethod(typeof(RestSitePatches), nameof(IconPrefix)));
+		harmony.Patch(target, transpiler: new HarmonyMethod(typeof(RestSitePatches), nameof(ReloadIconTranspiler)));
 		return true;
 	}
 
@@ -91,28 +93,29 @@ internal static class RestSitePatches
 		}
 	}
 
-	private static bool IconPrefix(RestSiteOption __instance, ref Texture2D __result)
+	private static IEnumerable<CodeInstruction> ReloadIconTranspiler(IEnumerable<CodeInstruction> instructions)
 	{
-		try
+		MethodInfo getter = AccessTools.PropertyGetter(typeof(RestSiteOption), nameof(RestSiteOption.Icon));
+		MethodInfo replacement = AccessTools.Method(typeof(RestSitePatches), nameof(GetActionIcon));
+		bool replaced = false;
+		foreach (CodeInstruction instruction in instructions)
 		{
-			if (__instance is not ForgeRestSiteOption)
+			if (instruction.Calls(getter))
 			{
-				return true;
+				instruction.opcode = OpCodes.Call;
+				instruction.operand = replacement;
+				replaced = true;
 			}
-			Texture2D? texture = ForgeArt.RestSiteIcon;
-			if (texture == null)
-			{
-				return true;
-			}
-			__result = texture;
-			return false;
+			yield return instruction;
 		}
-		catch (Exception e)
+		if (!replaced)
 		{
-			Log.Warn(Sts2ForgeMod.LogPrefix + "forge icon patch failed: " + e.Message);
-			return true;
+			throw new InvalidOperationException("Rest site button icon call was not found.");
 		}
 	}
+
+	private static Texture2D GetActionIcon(RestSiteOption option) =>
+		option is ForgeRestSiteOption && ForgeArt.RestSiteIconBig is { } art ? art : option.Icon;
 
 	private static bool AssetPathsPrefix(RestSiteOption __instance, ref IEnumerable<string> __result)
 	{

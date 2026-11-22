@@ -2,7 +2,7 @@
 // 纯 Node（无第三方依赖）的 PNG 编码器 + 锻铸图标的程序化绘制。
 // 用法：node assets/tools/gen-forge-icons.cjs
 // 产出：assets/icons/forge_rest_site.png (128x128) 与 assets/icons/forge_rest_site_big.png (512x512)。
-// 图形：铁砧 + 锤子，暖金色主体 + 近黑描边，透明背景（火堆按钮会自己加底）。
+// 小图为页首徽章，大图为带独立炉火背景的火堆行动插画。
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
@@ -111,6 +111,22 @@ function draw(size) {
     const dx = Math.abs(x - cx), dy = Math.abs(y - cy);
     return (dx * dx + dy * dy <= r * r) || (dx <= r * 0.28 && dy <= r) || (dy <= r * 0.28 && dx <= r);
   };
+
+  if (size === 512) {
+    paint(cv, shape(rrect(64, 64, 121, 121, 15)), [22, 16, 15]);
+    paint(cv, shape(rrect(64, 64, 116, 116, 13)), [111, 68, 43]);
+    paint(cv, shape(rrect(64, 64, 112, 112, 11)), [35, 25, 24]);
+    paint(cv, shape(rrect(64, 64, 86, 96, 32)), [72, 37, 26]);
+    paint(cv, shape(ellipse(64, 73, 35, 42)), [95, 46, 28]);
+    paint(cv, shape(ellipse(64, 77, 25, 31)), [132, 62, 31]);
+    paint(cv, shape(rrect(64, 113, 105, 9, 4)), [47, 29, 22]);
+    for (const [x, y, r] of [[28, 50, 2], [37, 35, 1.5], [77, 27, 1.7], [104, 52, 1.5], [103, 68, 2], [34, 92, 1.6]]) {
+      paint(cv, shape(spark(x, y, r)), [221, 120, 53]);
+    }
+  } else {
+    paint(cv, shape(rrect(64, 64, 106, 106, 22)), [39, 28, 24]);
+    paint(cv, shape(minus(rrect(64, 64, 106, 106, 22), rrect(64, 64, 101, 101, 20))), [141, 87, 54]);
+  }
 
   // 1) 深色描边：所有形状向外扩 3px（用粗一层的同形近似）
   paint(cv, shape((x, y) => anvil(x, y) || hammer(x, y)), [26, 20, 16], 1);
