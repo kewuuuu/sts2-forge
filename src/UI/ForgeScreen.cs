@@ -9,7 +9,9 @@ using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Localization.Fonts;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Cards;
+using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 using MegaCrit.Sts2.Core.Nodes.Vfx;
@@ -45,6 +47,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 	private NOverlayStack? _stack;
 	private NHotkeyManager? _hotkeys;
 	private NCard? _card;
+	private readonly Control _cardPivot = new() { MouseFilter = MouseFilterEnum.Ignore };
 	private bool _ended;
 	private Action? _commit;
 
@@ -91,6 +94,22 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		}
 		AddChild(margins);
 		margins.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+		void FitHeader()
+		{
+			if (!IsInsideTree() || NRun.Instance?.GlobalUi is not { } hud) return;
+			var local = GetGlobalTransformWithCanvas().AffineInverse();
+			var topBar = hud.TopBar;
+			float bottom = (local * topBar.GetGlobalTransformWithCanvas() * new Vector2(0, topBar.Size.Y)).Y;
+			var inventory = hud.RelicInventory;
+			if (inventory.IsVisibleInTree())
+			{
+				var inventoryBottom = inventory.GetBottomOfInventory() - inventory.GetDefaultPosition();
+				bottom = Mathf.Max(bottom, (local * inventory.GetGlobalTransformWithCanvas() * inventoryBottom).Y);
+			}
+			margins.AddThemeConstantOverride("margin_top", Mathf.Max(34, Mathf.CeilToInt(bottom) + 12));
+		}
+		Ready += FitHeader;
+		Resized += () => Callable.From(FitHeader).CallDeferred();
 		VBoxContainer page = Column();
 		margins.AddChild(page);
 		HBoxContainer header = new();
@@ -179,11 +198,11 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 
 	private void FitCard()
 	{
-		if (_card is { } card)
+		if (_card != null)
 		{
 			Vector2 available = _cardSlot.Size - new Vector2(32, 28);
 			float scale = Mathf.Clamp(Mathf.Min(available.X / NCard.defaultSize.X, available.Y / NCard.defaultSize.Y), 0.1f, 1.08f);
-			card.Scale = Vector2.One * scale;
+			_cardPivot.Scale = Vector2.One * scale;
 		}
 	}
 
@@ -227,9 +246,12 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 			_card = NCard.Create(target);
 			if (_card != null)
 			{
-				_cardSlot.AddChild(_card);
-				_card.SetAnchorsAndOffsetsPreset(LayoutPreset.Center);
-				_card.MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Disabled;
+				var holder = NGridCardHolder.Create(_card)!;
+				holder.SetClickable(false);
+				_cardSlot.AddChild(_cardPivot);
+				_cardPivot.SetAnchorsAndOffsetsPreset(LayoutPreset.Center);
+				_cardPivot.AddChild(holder);
+				holder.Position = Vector2.Zero;
 				_card.UpdateVisuals(PileType.None, CardPreviewMode.Normal);
 				FitCard();
 			}
@@ -249,7 +271,8 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 			int index = i;
 			Button box = AddChoice(candidates[i]);
 			box.ToggleMode = true;
-			box.Text = "○  " + box.Text;
+			Label caption = box.GetNode<Label>("Caption");
+			caption.Text = "○  " + caption.Text;
 			box.Toggled += selected =>
 			{
 				if (selected)
@@ -260,7 +283,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 				{
 					chosen.Remove(index);
 				}
-				box.Text = (selected ? "✓  " : "○  ") + CardLabel(candidates[index]);
+				caption.Text = (selected ? "✓  " : "○  ") + CardLabel(candidates[index]);
 				UpdateSelection();
 			};
 			boxes.Add(box);
@@ -307,6 +330,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 			{
 				vfx.ZIndex = 1;
 				_cardSlot.AddChild(vfx);
+				vfx.GlobalScale = _card.GetGlobalTransform().Scale;
 				SceneTreeTimer timer = GetTree().CreateTimer(0.95);
 				await ToSignal(timer, SceneTreeTimer.SignalName.Timeout);
 			}
@@ -482,16 +506,36 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 	{
 		Button button = new()
 		{
-			Text = CardLabel(card),
-			TooltipText = CardLabel(card) + "\n" + card.GetDescriptionForPile(PileType.None),
-			Alignment = HorizontalAlignment.Left,
-			TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-			CustomMinimumSize = new Vector2(0, 58),
+			CustomMinimumSize = new Vector2(0, 320),
+			ClipContents = true,
 		};
+		_choices.AddChild(button);
 		StyleButton(button, false, 22);
+		Label caption = Heading(CardLabel(card), 19);
+		caption.Name = "Caption";
+		caption.HorizontalAlignment = HorizontalAlignment.Center;
+		caption.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+		caption.MouseFilter = MouseFilterEnum.Ignore;
+		button.AddChild(caption);
+		caption.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
+		caption.OffsetTop = -38;
+		caption.OffsetBottom = -4;
+		if (NCard.Create(card) is { } face)
+		{
+			button.AddChild(face);
+			face.MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Disabled;
+			face.UpdateVisuals(PileType.Deck, CardPreviewMode.Normal);
+			void FitFace()
+			{
+				Vector2 area = button.Size - new Vector2(28, 56);
+				face.Scale = Vector2.One * Mathf.Max(0.1f, Mathf.Min(area.X / NCard.defaultSize.X, area.Y / NCard.defaultSize.Y));
+				face.Position = new Vector2(button.Size.X / 2, 8 + area.Y / 2);
+			}
+			button.Resized += FitFace;
+			FitFace();
+		}
 		button.FocusEntered += () => _focusedCard = card;
 		_rows.Add(card, button);
-		_choices.AddChild(button);
 		return button;
 	}
 

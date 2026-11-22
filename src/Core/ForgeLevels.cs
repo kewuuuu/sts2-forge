@@ -291,7 +291,7 @@ public static class ForgeLevels
 		try
 		{
 			LocString locString = new LocString(LocTable, key);
-			string text = locString.GetFormattedText();
+			string text = locString.GetRawText();
 			if (string.IsNullOrEmpty(text) || string.Equals(text, key, StringComparison.Ordinal))
 			{
 				return fallback;
