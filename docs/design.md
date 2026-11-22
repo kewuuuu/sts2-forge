@@ -1,0 +1,91 @@
+# 火堆锻铸 · 设计规格（v0.1.0-beta 依据）
+
+> 本文件是实现与验收的唯一依据。任何与代码冲突的地方以本文件为准；本文件与游戏源码冲突的地方以已核实行号为准。
+
+## 1. 一句话
+
+火堆（Rest Site）新增一个选项「锻铸」：选一张牌，付出一批**同名牌**当材料，有概率把它的**锻铸等级 +1**；等级越高效果越强，也越容易掉回去。
+
+## 2. 规则
+
+- 等级 0–5，初始 0。锻造**任意次**（每次 +1），上限 +5。
+- 一次锻铸 = **一次尝试**：消耗 `当前等级 + 1` 张同名牌（等级不限，含未强化；**诅咒也用同名牌**）。
+- 成功率 `p` 由设置给（默认 50%，范围 0–100）：
+  - 成功 → 等级 +1。
+  - 失败 → 材料不退；等级 −1（+0 时不变）。
+- **保护材料**：可以选择「一张锻铸等级相同的牌（同名牌或非同名牌）」作为垫子。带垫子失败时**不掉级**，垫子本身被消耗。
+- 可锻铸的牌：攻击 / 技能 / 能力 / 诅咒。状态牌、任务牌不可（无意义且会污染牌组）。
+
+## 3. 等级效果
+
+| 等级 | 效果 |
+|---|---|
+| +1 | 攻击牌 +3 伤害；技能牌 +3 格挡 |
+| +2 | 攻击 +3 伤害；技能 +3 格挡；**能力牌打出时抽 1 张**；**诅咒牌可打出**（0 费，打出后进弃牌堆） |
+| +3 | 打出时获得 1 点能量 |
+| +4 | 打出时额外再打一次（与重放次数相乘：重放 +1 时变 2 次 → ×2） |
+| +5 | 打出时获得 1 层「奇迹」（免伤） |
+
+等级效果**叠加**：+3 同时拥有 +1/+2 的效果。
+
+## 4. 概率与成本（无垫子时的期望材料数）
+
+递推：`F_n = ((n+1) + (1-p)·F_{n-1}) / p`，`F_0 = 1/p`；有垫子时 `F_n = (n+1)/p`。
+
+| 成功率 | +1 | +2 | +3 | +4 | +5 |
+|---|---|---|---|---|---|
+| 100% | 1 | 3 | 6 | 10 | 15 |
+| 80% | 1.3 | 4.1 | 8.5 | 14.6 | 22.4 |
+| 70% | 1.4 | 4.9 | 10.7 | 18.9 | 29.5 |
+| **50%（默认）** | **2** | **8** | **20** | **40** | **70** |
+| 30% | 3.3 | 17.8 | 61.5 | 176.8 | 462.5 |
+| 20% | 5 | 35 | 170 | 730 | 2995 |
+
+- `p = 0`：永远失败 —— 材料照扣、等级往回掉。设置页与确认框必须明确警告。
+- `p = 100`：无风险，+5 累计只要 15 张。
+
+## 5. 设置项（JSON：`<游戏目录>/mods/config/sts2-forge.cfg`，内容 JSON）
+
+| 键 | 类型 | 默认 | 范围 | 含义 |
+|---|---|---|---|---|
+| `success_percent` | int | 50 | 0–100 | 锻铸成功率 |
+| `consume_rest_action` | bool | true | — | 锻铸是否占掉本次火堆行动（false = 锻铸后还能治疗/打铁） |
+| `one_forge_per_rest` | bool | true | — | 一次火堆是否只能锻铸一次（仅在 `consume_rest_action=false` 时才有意义） |
+| `log_debug` | bool | false | — | 打印锻铸过程日志 |
+
+- 非法值回落默认并 `Log.Warn`。
+- 参数**开局冻结**（联机以房主为准），与另外两个模组同一套：快照在 `RunStarted`（单人/房主）或采纳房主配置后建立，本局内改设置只影响下一局。
+
+## 6. 存档与联机
+
+- 锻铸等级存进 `SerializableCard.Props`（int 键 `forge_level`）。补丁点：`CardModel.ToSerializable()`（写）与 `CardModel.FromSerializable(...)`（读）。
+- 关键词不进存档；因为「诅咒可打出」靠 `RemoveKeyword(Unplayable)`，**读档时必须按 forge_level 重新应用**（在 FromSerializable 补丁里做）。
+- 联机：`success_percent` 等参数由房主下发（INetMessage，同前两个模组）；锻铸本身发生在火堆（非战斗），且结果写进 run state 的牌数据，随存档/移交同步。**不要**新造"锻铸按钮"的自定义网络消息。
+
+## 7. 展示：仿词条
+
+- 卡面：在描述行里插入一行与「消耗/虚无」同款的词条文字（例：`锻铸 3`），走后置补丁改描述装配结果。
+- 悬浮提示：`CardModel.HoverTips` 后置追加一条，列出当前等级的全部生效效果。
+- **不是** `CardKeyword`：不 `AddKeyword` 自定义值（枚举不可扩展），也不复用任何已有词条值。
+
+## 8. 已核实的实现锚点（D:/engine/DSH/Workspace/_cache/sts2-1131-src）
+
+- 火堆选项：`MegaCrit.Sts2.Core.Events/RestSiteOption.cs:53-74`（Generate 里 Heal/Smith/(Mend) 之后调 `Hook.ModifyRestSiteOptions`）、`:23-29`（OptionId/Title/Description，loc 表 `rest_site_ui` 键 `OPTION_<ID>.name/.description/.descriptionDisabled`）、`:40` IsEnabled、`:83` `OnSelect`、`:31-35` Icon 路径写死 `ui/rest_site/option_<optionid>.png`。
+- 注入点：`MegaCrit.Sts2.Core.Hooks/Hook.cs:2156` `ModifyRestSiteOptions`（静态，可直接 postfix 追加选项），模型侧等价物 `AbstractModel.cs:2183`。
+- 选牌：`CardSelectCmd.FromDeckGeneric`（:593）用于选主卡与材料；材料过滤按 `Id.Entry` 与是否可锻铸。
+- 等级存档：`CardModel.cs:2429-2440` ToSerializable、`:2447-2471` FromSerializable；`SavedProperties` 支持 `List<SavedProperty<int>>`。
+- 关键词：`CardModel.cs:1464-1486` AddKeyword/RemoveKeyword；`CanPlay` 只在 `:1896` 查 `Unplayable`；费用取值处 `PlayerCombatState.cs:218` 已 `Math.Max(0, …)` ⇒ 诅咒可打出花 0 费。
+- 伤害/格挡加成要写**两处**（照抄附魔模式）：预览 `DamageVar.cs:28-40` / `BlockVar.cs:34` / `CalculatedDamageVar.cs:48,70` / `CalculatedBlockVar.cs:35,55`；结算 `Hook.cs:1685-1695`（伤害）、`Hook.cs:1512-1517`（格挡）。预览处调 Hook 必须传未加成的 BaseValue（`DamageVar.cs:42`），否则 +3 会算两次。
+- 出牌入口：`CardModel.OnPlayWrapper:2020`（统一后置点：抽牌 / +1 费 / 再打一次 / 奇迹都挂这里）；抽牌用 `CardPileCmd.Draw(choiceContext, 1m, player)`（`CardPileCmd.cs:988`）。
+- 卡面文字装配：`CardModel.cs:1551-1590`；悬浮提示 getter：`:1053`。
+- 火堆完成语义：日志里原版会打 "Completing rest site for player X because there are no options left" ⇒ 房间靠"剩余选项"推进；`OnSelect` 的返回值语义**必须先读 `RestSiteOption.cs` 与 `NRestSiteRoom`/RestSiteSynchronizer 确认再写**，不要凭猜。
+
+## 9. v0.1.0-beta 验收标准
+
+1. `dotnet build -c Release` 0 警告 0 错误，`dist/sts2-forge/{sts2-forge.dll, sts2-forge.json}` 产出。
+2. 无头启动 exit=0，日志有 `[sts2-forge] initialized; success_percent=…, consume_rest_action=…, one_forge_per_rest=…`，且无指向本模组的 ERROR。
+3. 火堆里出现「锻铸」选项，图标不是空白/占位。
+4. 锻铸一次：扣材料、按 p 判定、成功 +1 / 失败 −1（有垫子不掉级）、材料不退。
+5. 卡面出现词条行，悬浮有说明；读档后等级与词条都还在。
+6. +1 伤害/格挡的**显示数字与实际结算一致**；诅咒在 +2 后可以打出且 0 费。
+7. 设置页（RitsuLib，可选）能改 4 个键，概率滑块下方实时表格随拖动更新；不装 RitsuLib 时退回 JSON-only 且仍可编译。

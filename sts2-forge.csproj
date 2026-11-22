@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>sts2-forge</AssemblyName>
+    <RootNamespace>Sts2Forge</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <DebugType>portable</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GameDataDir Condition="'$(GameDataDir)' == ''">D:\software\steam\steamapps\common\Slay the Spire 2\data_sts2_windows_x86_64</GameDataDir>
+    <ModId>sts2-forge</ModId>
+    <ModDistDir>$(MSBuildProjectDirectory)\dist\$(ModId)</ModDistDir>
+    <EnableRitsuLib Condition="'$(EnableRitsuLib)' == ''">true</EnableRitsuLib>
+    <RitsuLibDir Condition="'$(RitsuLibDir)' == ''">D:\software\Steam\steamapps\workshop\content\2868840\3747602295</RitsuLibDir>
+    <RitsuLibReferenceTarget Condition="'$(RitsuLibReferenceTarget)' == ''">0.113.0</RitsuLibReferenceTarget>
+    <RitsuLibAvailable Condition="'$(EnableRitsuLib)' == 'true' And Exists('$(RitsuLibDir)\RitsuLib.References.props')">true</RitsuLibAvailable>
+    <RitsuLibAvailable Condition="'$(RitsuLibAvailable)' == ''">false</RitsuLibAvailable>
+  </PropertyGroup>
+
+  <Import Project="$(RitsuLibDir)\RitsuLib.References.props" Condition="'$(RitsuLibAvailable)' == 'true'" />
+
+  <PropertyGroup Condition="'$(RitsuLibAvailable)' == 'true'">
+    <DefineConstants>$(DefineConstants);RITSULIB</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(RitsuLibAvailable)' != 'true'">
+    <Compile Remove="src/Integration/**" />
+  </ItemGroup>
+
+  <Target Name="ReportRitsuLibState" BeforeTargets="CoreCompile">
+    <Message Importance="high" Condition="'$(RitsuLibAvailable)' == 'true'"
+             Text="RitsuLib settings page: enabled (RitsuLibReferenceTarget=$(RitsuLibReferenceTarget))" />
+    <Message Importance="high" Condition="'$(RitsuLibAvailable)' != 'true'"
+             Text="RitsuLib settings page: disabled; building the JSON-only variant" />
+  </Target>
+
+  <ItemGroup>
+    <Compile Remove="_tmp/**" />
+    <Compile Remove="dist/**" />
+    <Compile Remove="tools/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="assets/icons/forge_rest_site.png" LogicalName="Sts2Forge.Art.forge_rest_site.png" />
+    <EmbeddedResource Include="assets/icons/forge_rest_site_big.png" LogicalName="Sts2Forge.Art.forge_rest_site_big.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="sts2">
+      <HintPath>$(GameDataDir)\sts2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameDataDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GodotSharp">
+      <HintPath>$(GameDataDir)\GodotSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CheckGameAssemblies" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(GameDataDir)\sts2.dll')"
+           Text="sts2.dll not found under GameDataDir=$(GameDataDir); pass -p:GameDataDir=... to dotnet build." />
+    <Error Condition="!Exists('$(GameDataDir)\GodotSharp.dll')"
+           Text="GodotSharp.dll not found under GameDataDir=$(GameDataDir)." />
+  </Target>
+
+  <Target Name="StageModDirectory" AfterTargets="Build">
+    <MakeDir Directories="$(ModDistDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModDistDir)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\mod\$(ModId).json" DestinationFolder="$(ModDistDir)" />
+  </Target>
+
+</Project>

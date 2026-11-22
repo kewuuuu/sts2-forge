@@ -1,0 +1,12 @@
+{
+  "id": "sts2-forge",
+  "name": "火堆锻铸 / Forge",
+  "author": "kewu",
+  "description": "火堆新增「锻铸」：拆分同名牌把一张牌一路锻上去，越高越强，也越容易掉回去。",
+  "version": "0.1.0-beta",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": true,
+  "min_game_version": "0.113.1"
+}

@@ -1,0 +1,8 @@
+bin/
+obj/
+dist/
+_tmp/
+*.user
+.vs/
+*.suo
+steam_appid.txt
