@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Localization;
 using STS2RitsuLib.Settings;
 using STS2RitsuLib.Utils.Persistence;
 using Sts2Forge.Config;
@@ -55,12 +56,12 @@ internal static class RitsuLibSettingsPage
 	private static void Register()
 	{
 		ModSettingsPageBuilder builder = new ModSettingsPageBuilder(Sts2ForgeMod.ModId, PageId);
-		builder.WithTitle(ModSettingsText.Literal("火堆锻铸 / Forge"));
-		builder.WithDescription(ModSettingsText.Literal("锻铸成功率与火堆行为；联机时以房主参数为准。"));
-		builder.WithModDisplayName(ModSettingsText.Literal("火堆锻铸 / Forge"));
+		builder.WithTitle(Text("强化", "Upgrade"));
+		builder.WithDescription(Text("强化成功率与火堆行为。联机时以房主参数为准。", "Upgrade success chance and campfire behavior. Multiplayer uses the host’s settings."));
+		builder.WithModDisplayName(Text("强化", "Upgrade"));
 		builder.AddSection(SectionId, section =>
 		{
-			section.WithTitle(ModSettingsText.Literal("锻铸参数"));
+			section.WithTitle(Text("强化设置", "Upgrade settings"));
 			IModSettingsValueBinding<int> success = ModSettingsBindings.Callback<int>(
 				Sts2ForgeMod.ModId,
 				"success_percent",
@@ -70,20 +71,20 @@ internal static class RitsuLibSettingsPage
 				SaveScope.Global);
 			section.AddIntSlider(
 				"success_percent",
-				ModSettingsText.Literal("锻铸成功率（%）"),
+				Text("强化成功率（%）", "Upgrade success chance (%)"),
 				success,
 				ForgeConfig.SuccessPercentMin,
 				ForgeConfig.SuccessPercentMax,
 				1,
 				value => value + "%",
-				ModSettingsText.Literal("0 表示必定失败，100 表示必定成功。"));
+				Text("0 表示必定失败，100 表示必定成功。", "0 always fails and 100 always succeeds."));
 			section.AddParagraph(
 				"expected_materials",
 				ModSettingsText.Dynamic(BuildExpectedTable, new IModSettingsBinding[] { success }),
-				ModSettingsText.Literal("按当前成功率推算的期望材料张数（向上累积到目标等级，不含主卡）。"));
+				Text("按当前成功率推算达到各等级平均需要消耗的材料张数（不含目标牌）。", "Average number of materials needed to reach each level at the current success chance (excluding the target card)."));
 			section.AddToggle(
 				"consume_rest_action",
-				ModSettingsText.Literal("锻铸消耗本次休息点"),
+				Text("强化消耗本次火堆行动", "Upgrade uses the rest site action"),
 				ModSettingsBindings.Callback<bool>(
 					Sts2ForgeMod.ModId,
 					"consume_rest_action",
@@ -91,10 +92,10 @@ internal static class RitsuLibSettingsPage
 					value => WriteLocal(config => config.ConsumeRestAction = value),
 					() => { },
 					SaveScope.Global),
-				ModSettingsText.Literal("开启时，至少锻铸一轮后结束会话会用掉火堆行动。关闭时可继续治疗或打铁。"));
+				Text("开启后，强化至少一轮并结束时会用掉火堆行动。关闭后仍可休息或打铁。", "Finishing after at least one round uses the rest site action. When disabled, you can still rest or smith."));
 			section.AddToggle(
 				"one_forge_per_rest",
-				ModSettingsText.Literal("每处火堆只允许一次锻铸会话"),
+				Text("每处火堆只允许一次强化会话", "One upgrade session per rest site"),
 				ModSettingsBindings.Callback<bool>(
 					Sts2ForgeMod.ModId,
 					"one_forge_per_rest",
@@ -102,10 +103,10 @@ internal static class RitsuLibSettingsPage
 					value => WriteLocal(config => config.OneForgePerRest = value),
 					() => { },
 					SaveScope.Global),
-				ModSettingsText.Literal("完成至少一轮才计入次数。同一会话内可以继续锻铸。"));
+				Text("完成至少一轮才计入次数。同一会话内可以继续强化。", "Only sessions with at least one completed round count. You can upgrade multiple times in a session."));
 			section.AddToggle(
 				"log_debug",
-				ModSettingsText.Literal("输出调试日志"),
+				Text("输出调试日志", "Write debug logs"),
 				ModSettingsBindings.Callback<bool>(
 					Sts2ForgeMod.ModId,
 					"log_debug",
@@ -113,28 +114,34 @@ internal static class RitsuLibSettingsPage
 					value => WriteLocal(config => config.LogDebug = value),
 					() => { },
 					SaveScope.Global),
-				ModSettingsText.Literal("把每次锻铸的随机种子细节写进日志。"));
+				Text("记录每轮强化的随机种子。", "Log random seed details for each upgrade attempt."));
 		});
 		ModSettingsPage page = builder.Build();
 		ModSettingsRegistry.Register(page);
 	}
+
+	private static string Translate(string chinese, string english) =>
+		LocManager.Instance?.CultureInfo.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase) == true ? chinese : english;
+
+	private static ModSettingsText Text(string chinese, string english) =>
+		ModSettingsText.DynamicFullRefreshOnly(() => Translate(chinese, english));
 
 	private static string BuildExpectedTable()
 	{
 		ForgeConfig config = ForgeRuntimeConfig.Effective;
 		double probability = config.SuccessPercent / 100.0;
 		StringBuilder builder = new StringBuilder();
-		builder.Append("当前成功率 ").Append(config.SuccessPercent).Append('%');
+		builder.Append(Translate("当前成功率 ", "Current success chance ")).Append(config.SuccessPercent).Append('%');
 		if (config.SuccessPercent <= 0)
 		{
-			builder.Append("（必定失败：期望材料为无穷大）");
+			builder.Append(Translate("（必定失败：期望材料为无穷大）", " (always fails: expected materials are infinite)"));
 		}
 		builder.Append('\n');
-		builder.Append("期望材料：");
+		builder.Append(Translate("期望材料：", "Expected materials: "));
 		AppendLevels(builder, probability);
 		if (ForgeRuntimeConfig.IsMultiplayerClient)
 		{
-			builder.Append('\n').Append("联机中：本页只读，数值以房主为准。");
+			builder.Append('\n').Append(Translate("联机中：本页只读，数值以房主为准。", "Multiplayer: these settings are read-only and come from the host."));
 		}
 		return builder.ToString();
 	}

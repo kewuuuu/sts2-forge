@@ -224,7 +224,7 @@ public static class ForgeLevels
 
 	public static string GetLevelLabel()
 	{
-		return Loc("FORGE.CARD_LABEL", "锻铸");
+		return Loc("FORGE.CARD_LABEL", "强化");
 	}
 
 	public static string GetLevelText(int level)
@@ -240,7 +240,7 @@ public static class ForgeLevels
 	public static string BuildHoverTipBody(int level)
 	{
 		StringBuilder builder = new StringBuilder();
-		AppendLine(builder, "FORGE.TIP_LEVEL", "锻铸等级：{0}（每次锻铸 +1，上限 5）", level);
+		AppendLine(builder, "FORGE.TIP_LEVEL", "强化等级：{0}（成功时 +1，上限 5）", level);
 		if (level >= 1)
 		{
 			AppendLine(builder, "FORGE.TIP_DAMAGE", "攻击牌：伤害 +3");

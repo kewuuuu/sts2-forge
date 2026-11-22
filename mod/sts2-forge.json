@@ -1,8 +1,8 @@
 {
   "id": "sts2-forge",
-  "name": "火堆锻铸 / Forge",
+  "name": "强化",
   "author": "kewu",
-  "description": "火堆新增「锻铸」：拆分同名牌把一张牌一路锻上去，越高越强，也越容易掉回去。",
+  "description": "火堆新增「强化」：消耗同名牌，成功升一级，失败降一级。 / Upgrade a card at the campfire by spending matching copies. Success raises its level and failure lowers it.",
   "version": "0.1.0-beta",
   "has_pck": false,
   "has_dll": true,

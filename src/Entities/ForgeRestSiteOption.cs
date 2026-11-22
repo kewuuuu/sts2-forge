@@ -54,7 +54,7 @@ public sealed class ForgeRestSiteOption(Player owner) : RestSiteOption(owner)
 			{
 				try
 				{
-					screen = ForgeScreen.TryOpen(config.SuccessPercent);
+					screen = ForgeScreen.TryOpen(config.SuccessPercent, Owner.Deck.Cards);
 					targetSelection = screen == null ? [] : await screen.ChooseTarget(targets);
 				}
 				catch (Exception e)
