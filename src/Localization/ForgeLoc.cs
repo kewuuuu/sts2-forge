@@ -41,13 +41,14 @@ public static class ForgeLoc
 		["OPTION_FORGE.descriptionDisabled"] = "No attack, skill, power or curse below upgrade level 5 in your deck.",
 		["FORGE.CARD_LABEL"] = "Upgrade",
 		["FORGE.TIP_LEVEL"] = "Upgrade level: {0} (+1 on success, max 5)",
+		["FORGE.TIP_ON_PLAY_BLOCK"] = "Gain 3 Block when played",
 		["FORGE.TIP_DAMAGE"] = "Attack: +3 damage",
 		["FORGE.TIP_BLOCK"] = "Skill: +3 block",
 		["FORGE.TIP_DRAW"] = "Power: draw 1 card when played",
-		["FORGE.TIP_CURSE"] = "Curse: playable for 0 energy, goes to the discard pile",
+		["FORGE.TIP_CURSE"] = "Curse: can be played",
 		["FORGE.TIP_ENERGY"] = "Gain 1 energy when played",
 		["FORGE.TIP_REPLAY"] = "Played one extra time (multiplies with replay)",
-		["FORGE.TIP_MIRACLE"] = "Gain 1 Miracle when played (negates the next life loss)",
+		["FORGE.TIP_MIRACLE"] = "Gain 1 Miracle when played",
 	};
 
 	private static readonly Dictionary<string, string> Chinese = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -74,13 +75,14 @@ public static class ForgeLoc
 		["OPTION_FORGE.descriptionDisabled"] = "牌组里没有强化等级未满 5 的攻击、技能、能力或诅咒牌。",
 		["FORGE.CARD_LABEL"] = "强化",
 		["FORGE.TIP_LEVEL"] = "强化等级：{0}（成功时 +1，上限 5）",
+		["FORGE.TIP_ON_PLAY_BLOCK"] = "打出时获得 3 格挡",
 		["FORGE.TIP_DAMAGE"] = "攻击牌：伤害 +3",
 		["FORGE.TIP_BLOCK"] = "技能牌：格挡 +3",
 		["FORGE.TIP_DRAW"] = "能力牌打出时抽 1 张牌",
-		["FORGE.TIP_CURSE"] = "诅咒牌可以打出（0 费，进弃牌堆）",
+		["FORGE.TIP_CURSE"] = "诅咒牌可以打出",
 		["FORGE.TIP_ENERGY"] = "打出时获得 1 点能量",
 		["FORGE.TIP_REPLAY"] = "打出时额外再打一次（与重放次数相乘）",
-		["FORGE.TIP_MIRACLE"] = "打出时获得 1 层奇迹（抵消下一次生命损失）",
+		["FORGE.TIP_MIRACLE"] = "打出时获得 1 层奇迹",
 	};
 
 	public static void InjectAll()
@@ -120,6 +122,15 @@ public static class ForgeLoc
 					}
 				}
 			}
+			string miracle = MegaCrit.Sts2.Core.Models.ModelDb.GetId<Combat.ForgeMiraclePower>().Entry;
+			bool chinese = IsChinese(manager);
+			Inject(manager, "powers", new Dictionary<string, string>
+			{
+				[miracle + ".title"] = chinese ? "奇迹" : "Miracle",
+				[miracle + ".description"] = chinese
+					? "不会失去生命。每次出牌额外支付 1 点能量（X 费先预留 1 点）。每层使回合最大能量 +1。回合结束时，失去等于手牌数加 1 的层数。"
+					: "You cannot lose HP. Playing a card costs 1 extra Energy (reserved before calculating X). Gain 1 maximum Energy per stack. At turn end, lose stacks equal to your hand size plus 1."
+			});
 			Inject(manager, ForgeTable, entries);
 			Inject(manager, RestSiteTable, restSiteEntries);
 			Log.Info(Sts2ForgeMod.LogPrefix + "localization injected: " + entries.Count + " forge keys + " + restSiteEntries.Count + " rest site keys (culture=" + manager.CultureInfo.Name + ")");

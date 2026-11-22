@@ -83,12 +83,12 @@ public static class ForgeLevels
 
 	public static bool GivesDamageBonus(CardModel? card)
 	{
-		return card != null && GetLevel(card) >= 1 && card.Type == CardType.Attack;
+		return card != null && GetLevel(card) >= 2 && card.Type == CardType.Attack;
 	}
 
 	public static bool GivesBlockBonus(CardModel? card)
 	{
-		return card != null && GetLevel(card) >= 1 && card.Type == CardType.Skill;
+		return card != null && GetLevel(card) >= 2 && card.Type == CardType.Skill;
 	}
 
 	public static bool NeedsCurseUnplayableRemoved(CardModel? card)
@@ -139,7 +139,7 @@ public static class ForgeLevels
 	{
 		try
 		{
-			if (!card.CanonicalKeywords.Contains(CardKeyword.Unplayable))
+			if (card.Type != CardType.Curse || !card.CanonicalKeywords.Contains(CardKeyword.Unplayable))
 			{
 				return;
 			}
@@ -243,13 +243,17 @@ public static class ForgeLevels
 		AppendLine(builder, "FORGE.TIP_LEVEL", "强化等级：{0}（成功时 +1，上限 5）", level);
 		if (level >= 1)
 		{
+			AppendLine(builder, "FORGE.TIP_ON_PLAY_BLOCK", "打出时获得 3 格挡");
+		}
+		if (level >= 2)
+		{
 			AppendLine(builder, "FORGE.TIP_DAMAGE", "攻击牌：伤害 +3");
 			AppendLine(builder, "FORGE.TIP_BLOCK", "技能牌：格挡 +3");
 		}
 		if (level >= LevelDrawOnPower)
 		{
 			AppendLine(builder, "FORGE.TIP_DRAW", "能力牌打出时抽 1 张牌");
-			AppendLine(builder, "FORGE.TIP_CURSE", "诅咒牌可以打出（0 费，进弃牌堆）");
+			AppendLine(builder, "FORGE.TIP_CURSE", "诅咒牌可以打出");
 		}
 		if (level >= LevelEnergyOnPlay)
 		{
@@ -261,7 +265,7 @@ public static class ForgeLevels
 		}
 		if (level >= LevelMiracleOnPlay)
 		{
-			AppendLine(builder, "FORGE.TIP_MIRACLE", "打出时获得 1 层奇迹（抵消下一次生命损失）");
+			AppendLine(builder, "FORGE.TIP_MIRACLE", "打出时获得 1 层奇迹");
 		}
 		return builder.ToString().TrimEnd('\n');
 	}

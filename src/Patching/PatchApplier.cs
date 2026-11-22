@@ -29,6 +29,7 @@ internal static class PatchApplier
 			("RestSiteOption.Icon", () => RestSitePatches.RegisterIcon(harmony)),
 			("RestSiteOption.AssetPaths", () => RestSitePatches.RegisterAssetPaths(harmony)),
 			("AbstractModel.MutableClone", () => RestSitePatches.RegisterMutableClone(harmony)),
+			("Miracle protection, energy and artwork", () => MiraclePatches.Register(harmony)),
 			("Hook.ModifyDamage", () => CombatPatches.RegisterModifyDamage(harmony)),
 			("Hook.ModifyBlock", () => CombatPatches.RegisterModifyBlock(harmony)),
 			("Hook.ModifyCardPlayCount", () => CombatPatches.RegisterModifyCardPlayCount(harmony)),

@@ -1,4 +1,4 @@
-# 实现笔记（火堆强化 v0.1.0-beta）
+# 实现笔记（火堆强化 v0.2.0）
 
 ## 1. `RestSiteOption.OnSelect()` 的返回值语义（先读这一节）
 
@@ -34,8 +34,8 @@
 | `RestSiteOption.Generate` postfix | 把「强化」插在「打铁」后面 | 选项不出现 |
 | `RestSiteOption.Icon` prefix | 返回内嵌 PNG（`AssetPaths` 同时被 prefix 成空数组，避免原版去 `res://ui/rest_site/option_forge.png` 找图） | 图标回落 missing_power |
 | `AbstractModel.MutableClone` postfix | 克隆时复制等级 | 克隆牌丢等级 |
-| `Hook.ModifyDamage` prefix | +1 起攻击牌伤害 +3 | 伤害加成失效（卡面数字仍显示） |
-| `Hook.ModifyBlock` prefix | +1 起技能牌格挡 +3 | 格挡加成失效 |
+| `Hook.ModifyDamage` prefix | +2 起攻击牌伤害 +3 | 伤害加成失效（卡面数字仍显示） |
+| `Hook.ModifyBlock` prefix | +2 起技能牌格挡 +3 | 格挡加成失效 |
 | `Hook.ModifyCardPlayCount` postfix | +4 起打出次数 ×2（与重放相乘） | 额外打出失效 |
 | `CardModel.GetDescriptionForPile` postfix | 卡面追加「强化 N」 | 卡面不显示等级 |
 | `CardModel.HoverTips` postfix | 悬停加强化词条 | 悬停无说明 |
@@ -44,7 +44,7 @@
 
 每个补丁单独 try/catch，缺一个只打一条 WARN，不影响其它补丁与游戏本身（`PatchApplier.cs:42-60`）。
 
-+2 / +3 / +5 的打出效果不在补丁里，而是 `ForgeCombatListener`（`AbstractModel` 子类，`ShouldReceiveCombatHooks=true`，经 `ModHelper.SubscribeForCombatStateHooks` 每场战斗挂一次）：`AfterCardPlayed` 里按等级补抽牌 / 给能量 / 给 BufferPower（奇迹）。
++1 / +2 / +3 / +5 的打出效果不在补丁里，而是 `ForgeCombatListener`（`AbstractModel` 子类，`ShouldReceiveCombatHooks=true`，经 `ModHelper.SubscribeForCombatStateHooks` 每场战斗挂一次）：`AfterCardPlayed` 里按等级单独获得 3 格挡 / 抽牌 / 给能量 / 施加 ForgeMiraclePower（奇迹）。
 
 ## 5. 已知边界
 

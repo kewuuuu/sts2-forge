@@ -9,7 +9,7 @@ using Sts2Forge.Core;
 namespace Sts2Forge.Patching;
 
 /// <summary>
-/// +1 damage / +3 block live in the same two functions the previews use, so the number on the card
+/// Level 2 damage and block bonuses live in the same two functions the previews use, so the number on the card
 /// and the number the game applies cannot drift apart.
 /// </summary>
 internal static class CombatPatches

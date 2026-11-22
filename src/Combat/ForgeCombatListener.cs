@@ -7,13 +7,13 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
-using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.ValueProps;
 using Sts2Forge.Core;
 
 namespace Sts2Forge.Combat;
 
 /// <summary>
-/// Hook listener for the on-play parts of the forge table (+2 draw, +3 energy, +5 miracle).
+/// Hook listener for the on-play parts of the forge table (+1 block, +2 draw, +3 energy, +5 miracle).
 /// Registered once per combat state through ModHelper.SubscribeForCombatStateHooks.
 /// </summary>
 public sealed class ForgeCombatListener : AbstractModel
@@ -77,6 +77,8 @@ public sealed class ForgeCombatListener : AbstractModel
 			{
 				return;
 			}
+			// Same Move block as Adroit. A separate source keeps the +2 skill bonus on the native block.
+			await CreatureCmd.GainBlock(cardPlay.Player.Creature, 3m, ValueProp.Move, null);
 			if (level >= ForgeLevels.LevelDrawOnPower && card.Type == CardType.Power)
 			{
 				await CardPileCmd.Draw(choiceContext, ForgeLevels.CardsDrawnOnPower, cardPlay.Player);
@@ -87,7 +89,7 @@ public sealed class ForgeCombatListener : AbstractModel
 			}
 			if (level >= ForgeLevels.LevelMiracleOnPlay)
 			{
-				await PowerCmd.Apply<BufferPower>(choiceContext, cardPlay.Player.Creature, ForgeLevels.MiraclePerPlay, cardPlay.Player.Creature, card, true);
+				await PowerCmd.Apply<ForgeMiraclePower>(choiceContext, cardPlay.Player.Creature, ForgeLevels.MiraclePerPlay, cardPlay.Player.Creature, card, true);
 			}
 		}
 		catch (Exception e)
