@@ -3,7 +3,7 @@
   "name": "强化",
   "author": "kewu",
   "description": "火堆新增「强化」：消耗同名牌，成功升一级，失败降一级。 / Upgrade a card at the campfire by spending matching copies. Success raises its level and failure lowers it.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "has_pck": false,
   "has_dll": true,
   "dependencies": [],

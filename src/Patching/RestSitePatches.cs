@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.RestSite;
+using MegaCrit.Sts2.Core.Nodes.Rooms;
 using Sts2Forge.Art;
 using Sts2Forge.Core;
 using Sts2Forge.Entities;
@@ -60,6 +61,76 @@ internal static class RestSitePatches
 		}
 		harmony.Patch(target, postfix: new HarmonyMethod(typeof(RestSitePatches), nameof(MutableClonePostfix)));
 		return true;
+	}
+
+	internal static bool RegisterOptionRow(Harmony harmony)
+	{
+		MethodInfo? target = AccessTools.Method(typeof(NRestSiteRoom), "UpdateRestSiteOptions");
+		if (target == null)
+		{
+			return false;
+		}
+		harmony.Patch(target, postfix: new HarmonyMethod(typeof(RestSitePatches), nameof(OptionRowPostfix)));
+		return true;
+	}
+
+	private static void OptionRowPostfix(NRestSiteRoom __instance)
+	{
+		try
+		{
+			if (__instance == null || !__instance.IsInsideTree())
+			{
+				return;
+			}
+			Callable.From(delegate
+			{
+				FitOptionRow(__instance);
+			}).CallDeferred();
+		}
+		catch (Exception ex)
+		{
+			Log.Warn(Sts2ForgeMod.LogPrefix + "option row postfix failed: " + ex.Message);
+		}
+	}
+
+	private static void FitOptionRow(NRestSiteRoom room)
+	{
+		try
+		{
+			if (room == null || !room.IsInsideTree())
+			{
+				return;
+			}
+			if (!(AccessTools.Field(typeof(NRestSiteRoom), "_choicesContainer")?.GetValue(room) is Control row))
+			{
+				return;
+			}
+			int count = row.GetChildCount();
+			if (count < 2)
+			{
+				return;
+			}
+			float width = 0f;
+			for (int i = 0; i < count; i++)
+			{
+				if (row.GetChild(i) is Control child)
+				{
+					width = Mathf.Max(width, child.Position.X + child.Size.X);
+				}
+			}
+			float avail = row.Size.X;
+			if (row.GetParent() is Control parent && parent.Size.X > 0f)
+			{
+				avail = Mathf.Max(avail, parent.Size.X - 64f);
+			}
+			float fit = (width > 1f && avail > 1f) ? Mathf.Min(1f, avail / width) : 1f;
+			row.PivotOffset = row.Size * 0.5f;
+			row.Scale = new Vector2(fit, fit);
+		}
+		catch (Exception ex)
+		{
+			Log.Warn(Sts2ForgeMod.LogPrefix + "fit option row failed: " + ex.Message);
+		}
 	}
 
 	private static void GeneratePostfix(Player player, ref List<RestSiteOption> __result)

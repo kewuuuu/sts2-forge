@@ -16,7 +16,8 @@ public static class Sts2ForgeMod
 {
 	public const string ModId = "sts2-forge";
 	public const string LogPrefix = "[sts2-forge] ";
-	public const string Version = "0.2.0";
+	public const string Version = "0.3.0";
+
 
 	public static void Init()
 	{

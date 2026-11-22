@@ -52,6 +52,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 	private NCard? _card;
 	private readonly Control _cardPivot = new() { MouseFilter = MouseFilterEnum.Ignore };
 	private bool _ended;
+	private ulong _openedFrame;
 	private Action? _commit;
 
 	public NetScreenType ScreenType => NetScreenType.CardSelection;
@@ -100,17 +101,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		margins.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 		void FitHeader()
 		{
-			if (!IsInsideTree() || NRun.Instance?.GlobalUi is not { } hud) return;
-			var local = GetGlobalTransformWithCanvas().AffineInverse();
-			var topBar = hud.TopBar;
-			float bottom = (local * topBar.GetGlobalTransformWithCanvas() * new Vector2(0, topBar.Size.Y)).Y;
-			var inventory = hud.RelicInventory;
-			if (inventory.IsVisibleInTree())
-			{
-				var inventoryBottom = inventory.GetBottomOfInventory() - inventory.GetDefaultPosition();
-				bottom = Mathf.Max(bottom, (local * inventory.GetGlobalTransformWithCanvas() * inventoryBottom).Y);
-			}
-			int top = Mathf.Max(34, Mathf.CeilToInt(bottom) + 12);
+			int top = Mathf.Clamp(Mathf.CeilToInt(Size.Y * 0.16f) + 8, 40, 220);
 			if (margins.GetThemeConstant("margin_top") != top)
 			{
 				margins.AddThemeConstantOverride("margin_top", top);
@@ -119,7 +110,9 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		Ready += FitHeader;
 		TreeEntered += () => GetViewport().SizeChanged += FitHeader;
 		TreeExiting += () => GetViewport().SizeChanged -= FitHeader;
+		margins.ClipContents = true;
 		VBoxContainer page = Column();
+		page.SizeFlagsVertical = SizeFlags.ExpandFill;
 		margins.AddChild(page);
 		HBoxContainer header = new();
 		header.AddThemeConstantOverride("separation", 16);
@@ -146,11 +139,11 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		_status.AddThemeColorOverride("font_color", Muted);
 		choices.AddChild(_status);
 		_choices.AddThemeConstantOverride("separation", 7);
-		_choiceScroll = Scroll(_choices);
+		Control choiceBox = ScrollBox(_choices, out _choiceScroll);
 		_choices.SortChildren += QueueFaceRefresh;
 		_choiceScroll.Resized += QueueFaceRefresh;
 		_choiceScroll.GetVScrollBar().ValueChanged += _ => QueueFaceRefresh();
-		choices.AddChild(_choiceScroll);
+		choices.AddChild(choiceBox);
 		AddColumn(choices, 316, 1.1f);
 
 		VBoxContainer center = Column();
@@ -181,7 +174,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		Label emptyHistory = Heading(T("EMPTY_HISTORY", "No upgrade attempts yet."), 21);
 		emptyHistory.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		_history.AddChild(emptyHistory);
-		log.AddChild(Scroll(_history));
+		log.AddChild(ScrollBox(_history, out _));
 		AddColumn(log, 254, 1f);
 
 		HBoxContainer actions = new() { Alignment = BoxContainer.AlignmentMode.End };
@@ -374,6 +367,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 			_finish.Disabled = false;
 			render();
 			QueueFaceRefresh();
+			_openedFrame = Engine.GetProcessFrames();
 			if (_materials)
 			{
 				if (!restore)
@@ -385,13 +379,13 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 			}
 			else if (IsVisibleInTree())
 			{
-				DefaultFocusedControl.GrabFocus();
+				Callable.From(FocusFirstChoice).CallDeferred();
 			}
 		}
 		catch (Exception e)
 		{
 			Log.Warn(Sts2ForgeMod.LogPrefix + "forge choice UI failed: " + e);
-			End();
+			End("ui-failed");
 		}
 		return choice.Task;
 	}
@@ -417,16 +411,30 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		Callable.From(() => pending.TrySetResult(indexes)).CallDeferred();
 	}
 
-	private void RequestFinish()
+	private void FocusFirstChoice()
 	{
-		if (!_finish.Disabled)
+		if (!_ended && IsVisibleInTree())
 		{
-			End();
+			DefaultFocusedControl.GrabFocus();
 		}
 	}
 
-	private void End()
+	private void RequestFinish()
 	{
+		if (Engine.GetProcessFrames() - _openedFrame < 2)
+		{
+			Log.Info(Sts2ForgeMod.LogPrefix + " forge finish ignored: screen just opened");
+			return;
+		}
+		if (!_finish.Disabled)
+		{
+			End("finish");
+		}
+	}
+
+	private void End(string reason)
+	{
+		Log.Info(Sts2ForgeMod.LogPrefix + $"forge end: reason={reason} ended={_ended} pending={_choice != null} in_tree={IsInsideTree()} visible={IsVisibleInTree()} size={Size}");
 		_ended = true;
 		Complete([]);
 	}
@@ -454,7 +462,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 
 	internal void Close()
 	{
-		End();
+		End("close");
 		if (_stack != null && IsInsideTree())
 		{
 			_stack.Remove(this);
@@ -468,6 +476,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 	public void AfterOverlayOpened() { }
 	public void AfterOverlayShown()
 	{
+		Log.Info(Sts2ForgeMod.LogPrefix + "forge overlay shown callback");
 		Show();
 		QueueFaceRefresh();
 		if (_hotkeys == null && NHotkeyManager.Instance is { } manager)
@@ -483,6 +492,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 
 	public void AfterOverlayHidden()
 	{
+		Log.Info(Sts2ForgeMod.LogPrefix + $"forge overlay hidden callback: pending={_choice != null} in_tree={IsInsideTree()}");
 		UnbindReturnHotkeys();
 		Hide();
 	}
@@ -490,7 +500,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 	{
 		UnbindReturnHotkeys();
 		_stack = null;
-		End();
+		End("overlay-closed");
 		Hide();
 		QueueFree();
 	}
@@ -504,7 +514,7 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		}
 		ReleaseFaces();
 		UnbindReturnHotkeys();
-		End();
+		End("tree-exiting");
 	}
 
 	private void RestoreMaterialFocus(TaskCompletionSource<List<int>> choice)
@@ -611,6 +621,15 @@ internal sealed partial class ForgeScreen : Control, IOverlayScreen
 		content.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		scroll.AddChild(content);
 		return scroll;
+	}
+
+	private static Control ScrollBox(VBoxContainer content, out ScrollContainer scroll)
+	{
+		scroll = Scroll(content);
+		Control box = new() { SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
+		box.AddChild(scroll);
+		scroll.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+		return box;
 	}
 
 	private static VBoxContainer Column()
