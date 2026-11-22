@@ -1,7 +1,6 @@
 using System;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
-using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Forge.Combat;
 using Sts2Forge.Config;
@@ -54,9 +53,9 @@ public static class Sts2ForgeMod
 	{
 		try
 		{
-			// Mod init runs before ModelDb.Init (OneTimeInitialization.cs:59 vs :81), and a model type that nothing else
-			// references is registered only if the subtype scan already cached it. Inject keeps the listener resolvable.
-			ModelDb.Inject(typeof(ForgeCombatListener));
+			// ModelDb.Init (OneTimeInitialization.cs:81) constructs every AbstractModel subtype it finds, which registers
+			// this listener; never construct or Inject one by hand, because AbstractModel's constructor registers itself
+			// and a second instance makes ModelDb.Init throw DuplicateModelException at startup.
 			ModHelper.SubscribeForCombatStateHooks(ModId, ForgeCombatListener.ProvideForCombat);
 			Log.Info(LogPrefix + "combat hook listener subscribed (model resolves on first combat hook)");
 		}

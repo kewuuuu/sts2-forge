@@ -65,8 +65,10 @@ public static class ForgeLevels
 
 	public static bool IsForgeable(CardModel? card)
 	{
-		if (card == null)
+		if (card == null || GetLevel(card) >= MaxLevel)
 		{
+			// A max-level card has nothing left to gain: a successful roll would consume (level + 1)
+			// copies and stay at MaxLevel, and a failed one would drop it back down. Never offer it.
 			return false;
 		}
 		return card.Type switch

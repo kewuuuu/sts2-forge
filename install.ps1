@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$projectRoot = Split-Path -Parent $PSScriptRoot
+$projectRoot = $PSScriptRoot
 $distDir = Join-Path $projectRoot ('dist\' + $ModId)
 $dll = Join-Path $distDir ($ModId + '.dll')
 $manifest = Join-Path $distDir ($ModId + '.json')
